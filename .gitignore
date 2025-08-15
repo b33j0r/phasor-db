@@ -1,0 +1,15 @@
+# Zig
+zig-cache/
+.zig-cache/
+zig-out/
+build/
+build-*/
+docgen_tmp/
+.zbscanhelper.zig
+
+# IDE
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
