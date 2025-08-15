@@ -13,18 +13,16 @@ const Velocity = fixtures.Velocity;
 const Health = fixtures.Health;
 const Marker = fixtures.Marker;
 const LargeComponent = fixtures.LargeComponent;
+const TestPositions = fixtures.TestPositions;
+const TestHealth = fixtures.TestHealth;
+const TestVelocity = fixtures.TestVelocity;
+const TestEntity = fixtures.TestEntity;
 
 test "Archetype create empty" {
     const allocator = std.testing.allocator;
     var archetype = try Archetype.fromComponents(allocator, .{
-        Position{
-            .x = 0.0,
-            .y = 0.0,
-        },
-        Health{
-            .max = 100,
-            .current = 50,
-        },
+        TestPositions.origin,
+        TestHealth.damaged,
     });
     defer archetype.deinit();
 
@@ -40,55 +38,30 @@ test "Archetype create empty" {
 test "Archetype calculateId" {
     const allocator = std.testing.allocator;
     const archetype_id = Archetype.calculateId(.{
-        Position{
-            .x = 0.0,
-            .y = 0.0,
-        },
-        Health{
-            .max = 100,
-            .current = 50,
-        },
+        TestPositions.origin,
+        TestHealth.damaged,
     });
 
     var archetype = try Archetype.fromComponents(allocator, .{
-        Position{
-            .x = 0.0,
-            .y = 0.0,
-        },
-        Health{
-            .max = 100,
-            .current = 50,
-        },
+        TestPositions.origin,
+        TestHealth.damaged,
     });
     defer archetype.deinit();
 
     try testing.expectEqual(archetype_id, archetype.id);
-
 }
 
 test "Archetype create with different order of components is the same" {
     const allocator = std.testing.allocator;
     var archetype1 = try Archetype.fromComponents(allocator, .{
-        Position{
-            .x = 0.0,
-            .y = 0.0,
-        },
-        Health{
-            .max = 100,
-            .current = 50,
-        },
+        TestPositions.origin,
+        TestHealth.damaged,
     });
     defer archetype1.deinit();
 
     var archetype2 = try Archetype.fromComponents(allocator, .{
-        Health{
-            .max = 100,
-            .current = 50,
-        },
-        Position{
-            .x = 0.0,
-            .y = 0.0,
-        },
+        TestHealth.damaged,
+        TestPositions.origin,
     });
     defer archetype2.deinit();
 
@@ -98,26 +71,14 @@ test "Archetype create with different order of components is the same" {
 test "Archetype addEntity" {
     const allocator = std.testing.allocator;
     var archetype = try Archetype.fromComponents(allocator, .{
-        Position{
-            .x = 0.0,
-            .y = 0.0,
-        },
-        Health{
-            .max = 100,
-            .current = 50,
-        },
+        TestPositions.origin,
+        TestHealth.damaged,
     });
     defer archetype.deinit();
 
     const entity_index = try archetype.addEntity(10, .{
-        Position{
-            .x = 1.0,
-            .y = 2.0,
-        },
-        Health{
-            .max = 200,
-            .current = 150,
-        },
+        TestPositions.basic,
+        TestHealth.high_max,
     });
 
     const position_index = archetype.getColumnIndexByType(Position).?;
@@ -131,46 +92,28 @@ test "Archetype addEntity" {
     const position = archetype.columns[position_index].get(entity_index, Position).?;
     const health = archetype.columns[health_index].get(entity_index, Health).?;
 
-    try testing.expectEqual(1.0, position.x);
-    try testing.expectEqual(2.0, position.y);
-    try testing.expectEqual(200, health.max);
-    try testing.expectEqual(150, health.current);
+    try testing.expectEqual(TestPositions.basic.x, position.x);
+    try testing.expectEqual(TestPositions.basic.y, position.y);
+    try testing.expectEqual(TestHealth.high_max.max, health.max);
+    try testing.expectEqual(TestHealth.high_max.current, health.current);
 }
 
 test "Archetype removeEntityByIndex" {
     const allocator = std.testing.allocator;
     var archetype = try Archetype.fromComponents(allocator, .{
-        Position{
-            .x = 0.0,
-            .y = 0.0,
-        },
-        Health{
-            .max = 100,
-            .current = 50,
-        },
+        TestPositions.origin,
+        TestHealth.damaged,
     });
     defer archetype.deinit();
 
     _ = try archetype.addEntity(10, .{
-        Position{
-            .x = 1.0,
-            .y = 2.0,
-        },
-        Health{
-            .max = 200,
-            .current = 150,
-        },
+        TestPositions.basic,
+        TestHealth.high_max,
     });
 
     _ = try archetype.addEntity(20, .{
-        Position{
-            .x = 3.0,
-            .y = 4.0,
-        },
-        Health{
-            .max = 300,
-            .current = 250,
-        },
+        TestPositions.alternative,
+        TestHealth.very_high,
     });
 
     const removed_entity_id = try archetype.removeEntityByIndex(0);

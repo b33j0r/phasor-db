@@ -14,6 +14,8 @@ const createPositionArray = fixtures.createPositionArray;
 const createHealthArray = fixtures.createHealthArray;
 const createMarkerArray = fixtures.createMarkerArray;
 const createPopulatedArray = fixtures.createPopulatedArray;
+const TestPositions = fixtures.TestPositions;
+const TestHealth = fixtures.TestHealth;
 
 test "componentId is consistent" {
     const pos_id1 = componentId(Position);
@@ -36,8 +38,8 @@ test "componentId generates unique identifiers from types" {
 }
 
 test "componentId generates unique identifiers from values" {
-    const pos_id = componentId(Position{ .x = 1.0, .y = 2.0 });
-    const health_id = componentId(Health{ .current = 100, .max = 200 });
+    const pos_id = componentId(TestPositions.basic);
+    const health_id = componentId(TestHealth.high_max);
     const empty_id = componentId(Marker{});
 
     try testing.expect(pos_id != health_id);
@@ -45,11 +47,11 @@ test "componentId generates unique identifiers from values" {
     try testing.expect(pos_id != empty_id);
 
     // Same value should generate same ID
-    try testing.expectEqual(pos_id, componentId(Position{ .x = 1.0, .y = 2.0 }));
+    try testing.expectEqual(pos_id, componentId(TestPositions.basic));
 }
 
 test "componentId generates the same ID from a value and its type" {
-    const pos_id = componentId(Position{ .x = 1.0, .y = 2.0 });
+    const pos_id = componentId(TestPositions.basic);
     const pos_type_id = componentId(Position);
 
     try testing.expectEqual(pos_id, pos_type_id);
@@ -372,8 +374,8 @@ test "ComponentArray memory alignment correctness" {
     var pos_array = createPositionArray(allocator);
     defer pos_array.deinit();
 
-    try pos_array.append(Position{ .x = 1.0, .y = 2.0 });
-    try pos_array.append(Position{ .x = 3.0, .y = 4.0 });
+    try pos_array.append(TestPositions.basic);
+    try pos_array.append(TestPositions.alternative);
 
     // Verify that pointers are properly aligned
     const ptr1 = pos_array.get(0, Position).?;

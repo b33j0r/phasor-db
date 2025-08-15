@@ -14,6 +14,10 @@ const Health = fixtures.Health;
 const Marker = fixtures.Marker;
 const LargeComponent = fixtures.LargeComponent;
 const Velocity = fixtures.Velocity;
+const TestPositions = fixtures.TestPositions;
+const TestHealth = fixtures.TestHealth;
+const TestVelocity = fixtures.TestVelocity;
+const TestEntity = fixtures.TestEntity;
 
 test "Database init" {
     const allocator = std.testing.allocator;
@@ -25,17 +29,17 @@ test "Database init" {
     try testing.expectEqual(0, db.entities.count());
 }
 
-test "addComponents - add to existing entity" {
+test "Database addComponents - add to existing entity" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();
 
     // Create an entity with Position
-    const entity_id = try db.createEntity(.{ .position = Position{ .x = 1.0, .y = 2.0 } });
+    const entity_id = try db.createEntity(TestEntity.basic_positioned);
     try testing.expectEqual(@as(usize, 1), db.archetypes.count());
 
     // Add Health component
-    try db.addComponents(entity_id, .{ .health = Health{ .current = 100, .max = 100 } });
+    try db.addComponents(entity_id, .{ .health = TestHealth.full });
 
     // Entity should now be in a different archetype
     const entity = db.getEntity(entity_id).?;
@@ -46,43 +50,40 @@ test "addComponents - add to existing entity" {
     try testing.expectEqual(@as(usize, 1), db.archetypes.count());
 
     // Verify entity has both components
-    try testing.expectEqual(@as(f32, 1.0), entity.get(Position).?.x);
-    try testing.expectEqual(@as(i32, 100), entity.get(Health).?.current);
+    try testing.expectEqual(TestPositions.basic.x, entity.get(Position).?.x);
+    try testing.expectEqual(TestHealth.full.current, entity.get(Health).?.current);
 }
 
-test "addComponents - add existing component (no-op)" {
+test "Database addComponents - add existing component (no-op)" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();
 
     // Create an entity with Position
-    const entity_id = try db.createEntity(.{ .position = Position{ .x = 1.0, .y = 2.0 } });
+    const entity_id = try db.createEntity(TestEntity.basic_positioned);
     const original_archetype_count = db.archetypes.count();
 
     // Try to add Position again - should be a no-op
-    try db.addComponents(entity_id, .{ .position = Position{ .x = 3.0, .y = 4.0 } });
+    try db.addComponents(entity_id, .{ .position = TestPositions.alternative });
 
     // Should still have the same number of archetypes
     try testing.expectEqual(original_archetype_count, db.archetypes.count());
     
     // Entity should still have original position (no-op)
     const entity = db.getEntity(entity_id).?;
-    try testing.expectEqual(@as(f32, 1.0), entity.get(Position).?.x);
+    try testing.expectEqual(TestPositions.basic.x, entity.get(Position).?.x);
 }
 
-test "removeComponents - remove from entity" {
+test "Database removeComponents - remove from entity" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();
 
     // Create an entity with Position and Health
-    const entity_id = try db.createEntity(.{ 
-        .position = Position{ .x = 1.0, .y = 2.0 },
-        .health = Health{ .current = 100, .max = 100 }
-    });
+    const entity_id = try db.createEntity(TestEntity.healthy_positioned);
 
     // Remove Health component
-    try db.removeComponents(entity_id, .{ .health = Health{ .current = 0, .max = 0 } });
+    try db.removeComponents(entity_id, .{ .health = TestHealth.critical });
 
     // Entity should now be in a different archetype with only Position
     const entity = db.getEntity(entity_id).?;
@@ -90,33 +91,33 @@ test "removeComponents - remove from entity" {
     try testing.expectEqual(@as(usize, 1), archetype.columns.len);
     
     // Should still have Position component
-    try testing.expectEqual(@as(f32, 1.0), entity.get(Position).?.x);
+    try testing.expectEqual(TestPositions.basic.x, entity.get(Position).?.x);
     
     // Should not have Health component
     try testing.expectEqual(@as(?*Health, null), entity.get(Health));
 }
 
-test "removeComponents - remove non-existent component (no-op)" {
+test "Database removeComponents - remove non-existent component (no-op)" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();
 
     // Create an entity with only Position
-    const entity_id = try db.createEntity(.{ .position = Position{ .x = 1.0, .y = 2.0 } });
+    const entity_id = try db.createEntity(TestEntity.basic_positioned);
     const original_archetype_count = db.archetypes.count();
 
     // Try to remove Health (which doesn't exist) - should be a no-op
-    try db.removeComponents(entity_id, .{ .health = Health{ .current = 0, .max = 0 } });
+    try db.removeComponents(entity_id, .{ .health = TestHealth.critical });
 
     // Should still have the same number of archetypes
     try testing.expectEqual(original_archetype_count, db.archetypes.count());
     
     // Entity should still have original position
     const entity = db.getEntity(entity_id).?;
-    try testing.expectEqual(@as(f32, 1.0), entity.get(Position).?.x);
+    try testing.expectEqual(TestPositions.basic.x, entity.get(Position).?.x);
 }
 
-test "removeComponents - cannot remove all components" {
+test "Database removeComponents - cannot remove all components" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();
@@ -129,7 +130,7 @@ test "removeComponents - cannot remove all components" {
     try testing.expectError(error.CannotRemoveAllComponents, result);
 }
 
-test "archetype pruning - empty archetype gets cleaned up" {
+test "Database archetype pruning - empty archetype gets cleaned up" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();
@@ -158,7 +159,7 @@ test "archetype pruning - empty archetype gets cleaned up" {
     try testing.expectEqual(@as(i32, 80), entity2_ref.get(Health).?.current);
 }
 
-test "complex component operations" {
+test "Database complex component operations" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();
@@ -190,7 +191,7 @@ test "complex component operations" {
 
 // Regression tests for bookkeeping integrity
 
-test "regression - component ID consistency" {
+test "Database component ID consistency" {
     // Regression test: Verify componentId() remains stable across operations
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
@@ -217,7 +218,7 @@ test "regression - component ID consistency" {
     try testing.expect(found_id);
 }
 
-test "regression - entity row_index tracking" {
+test "Database entity row_index tracking" {
     // Regression test: Verify entity row_index is correctly tracked
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
@@ -238,7 +239,7 @@ test "regression - entity row_index tracking" {
     try testing.expectEqual(entity1.archetype_id, entity2.archetype_id);
 }
 
-test "regression - entity get chain integrity" {
+test "Database entity get chain integrity" {
     // Regression test: Verify Entity.get() chain works step by step
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
