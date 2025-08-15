@@ -93,3 +93,45 @@ test "Archetype create with different order of components is the same" {
 
     try testing.expectEqual(archetype1.id, archetype2.id);
 }
+
+test "Archetype add entity" {
+    const allocator = std.testing.allocator;
+    var archetype = try Archetype.fromComponents(allocator, .{
+        Position{
+            .x = 0.0,
+            .y = 0.0,
+        },
+        Health{
+            .max = 100,
+            .current = 50,
+        },
+    });
+    defer archetype.deinit();
+
+    const entity_index = try archetype.addEntity(10, .{
+        Position{
+            .x = 1.0,
+            .y = 2.0,
+        },
+        Health{
+            .max = 200,
+            .current = 150,
+        },
+    });
+
+    const position_index = archetype.getColumnIndexByType(Position).?;
+    const health_index = archetype.getColumnIndexByType(Health).?;
+
+    try testing.expectEqual(1, archetype.entity_ids.items.len);
+    try testing.expectEqual(10, archetype.entity_ids.items[entity_index]);
+    try testing.expectEqual(1, archetype.columns[position_index].len);
+    try testing.expectEqual(1, archetype.columns[health_index].len);
+
+    const position = archetype.columns[position_index].get(entity_index, Position).?;
+    const health = archetype.columns[health_index].get(entity_index, Health).?;
+
+    try testing.expectEqual(1.0, position.x);
+    try testing.expectEqual(2.0, position.y);
+    try testing.expectEqual(200, health.max);
+    try testing.expectEqual(150, health.current);
+}

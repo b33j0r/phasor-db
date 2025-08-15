@@ -140,3 +140,46 @@ pub fn fromComponents(
 
     return Archetype.init(allocator, archetype_id, name, columns_slice);
 }
+
+pub fn addEntity(
+    self: *Archetype,
+    entity_id: Entity.Id,
+    components: anytype,
+) !usize {
+    const fields = std.meta.fields(@TypeOf(components));
+
+    // Verify the number of columns matches
+    if (fields.len != self.columns.len) {
+        return error.ComponentCountMismatch;
+    }
+
+    // Get sorted component IDs from the input
+    const input_sorted_ids = comptime getSortedComponentIds(components);
+
+    // Verify that the component types match exactly
+    for (input_sorted_ids, self.name) |input_id, archetype_id| {
+        if (input_id != archetype_id) {
+            return error.ComponentTypeMismatch;
+        }
+    }
+
+    // Add the entity ID to our entity list
+    try self.entity_ids.append(self.allocator, entity_id);
+    const entity_index = self.entity_ids.items.len - 1;
+
+    // Add component data to each column in the correct order
+    inline for (input_sorted_ids, 0..) |target_id, column_index| {
+        // Find the matching field in the components struct
+        inline for (fields) |field| {
+            const component_value = @field(components, field.name);
+            const ComponentType = @TypeOf(component_value);
+
+            if (componentId(ComponentType) == target_id) {
+                try self.columns[column_index].append(component_value);
+                break;
+            }
+        }
+    }
+
+    return entity_index;
+}
