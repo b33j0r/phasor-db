@@ -35,13 +35,33 @@ pub fn getEntity(self: *Database, id: Entity.Id) ?Entity {
 pub fn removeEntity(self: *Database, entity_id: Entity.Id) !void {
     const entity = self.entities.get(entity_id) orelse return error.EntityNotFound;
 
-    std.debug.assert(entity.id == entity_id, "Entity ID mismatch");
+    std.debug.assert(entity.id == entity_id);
 
     // Get the archetype and row index for this entity
     const archetype = self.archetypes.getPtr(entity.archetype_id) orelse return error.ArchetypeNotFound;
 
+    // Check if there's an entity that will be moved due to swapRemove
+    var moved_entity_id: ?Entity.Id = null;
+    if (entity.row_index < archetype.entity_ids.items.len - 1) {
+        // The last entity will be moved to this position
+        moved_entity_id = archetype.entity_ids.items[archetype.entity_ids.items.len - 1];
+    }
+
     // Remove the entity from the archetype
-    _ = try archetype.removeEntityByIndex(entity.index);
+    _ = try archetype.removeEntityByIndex(entity.row_index);
+
+    // Update the row index of the entity that was moved (if any)
+    if (moved_entity_id) |moved_id| {
+        if (self.entities.getPtr(moved_id)) |moved_entity_ptr| {
+            moved_entity_ptr.row_index = entity.row_index;
+        }
+    }
+
+    // Remove the entity from the entities map
+    _ = self.entities.swapRemove(entity_id);
+
+    // Clean up empty archetypes
+    self.pruneIfEmpty(archetype);
 }
 
 pub fn createEntity(self: *Database, components: anytype) !Entity.Id {

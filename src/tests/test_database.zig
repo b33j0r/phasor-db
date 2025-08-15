@@ -74,6 +74,161 @@ test "Database addComponents - add existing component (no-op)" {
     try testing.expectEqual(TestPositions.basic.x, entity.get(Position).?.x);
 }
 
+test "Database removeEntity" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create an entity with Position and Health
+    const entity_id = try db.createEntity(TestEntity.healthy_positioned);
+    try testing.expectEqual(@as(usize, 1), db.archetypes.count());
+
+    // Remove the entity
+    try db.removeEntity(entity_id);
+
+    // Entity should no longer exist
+    try testing.expectEqual( null, db.getEntity(entity_id) );
+
+    // Archetype count should be 0 after removing the only entity
+    try testing.expectEqual(@as(usize, 0), db.archetypes.count());
+}
+
+test "Database removeEntity - non-existent entity" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Try to remove non-existent entity
+    const result = db.removeEntity(999);
+    try testing.expectError(error.EntityNotFound, result);
+}
+
+test "Database removeEntity - multiple entities same archetype" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create multiple entities with same archetype
+    const entity1_id = try db.createEntity(TestEntity.healthy_positioned);
+    const entity2_id = try db.createEntity(TestEntity.healthy_positioned);
+    const entity3_id = try db.createEntity(TestEntity.healthy_positioned);
+    
+    try testing.expectEqual(@as(usize, 1), db.archetypes.count());
+
+    // Remove middle entity
+    try db.removeEntity(entity2_id);
+
+    // Other entities should still exist
+    try testing.expect(db.getEntity(entity1_id) != null);
+    try testing.expect(db.getEntity(entity3_id) != null);
+    try testing.expectEqual(null, db.getEntity(entity2_id));
+
+    // Archetype should still exist with remaining entities
+    try testing.expectEqual(@as(usize, 1), db.archetypes.count());
+
+    // Remove all remaining entities
+    try db.removeEntity(entity1_id);
+    try db.removeEntity(entity3_id);
+
+    // All entities should be gone
+    try testing.expectEqual(null, db.getEntity(entity1_id));
+    try testing.expectEqual(null, db.getEntity(entity3_id));
+
+    // Archetype should be pruned when empty
+    try testing.expectEqual(@as(usize, 0), db.archetypes.count());
+}
+
+test "Database removeEntity - different archetypes" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create entities with different archetypes
+    const basic_entity = try db.createEntity(TestEntity.basic_positioned);
+    const healthy_entity = try db.createEntity(TestEntity.healthy_positioned);
+    const moving_entity = try db.createEntity(TestEntity.moving_entity);
+    
+    try testing.expectEqual(@as(usize, 3), db.archetypes.count());
+
+    // Remove entity from middle archetype
+    try db.removeEntity(healthy_entity);
+
+    // Other entities should still exist
+    try testing.expect(db.getEntity(basic_entity) != null);
+    try testing.expect(db.getEntity(moving_entity) != null);
+    try testing.expectEqual(null, db.getEntity(healthy_entity));
+
+    // Only the empty archetype should be pruned
+    try testing.expectEqual(@as(usize, 2), db.archetypes.count());
+
+    // Verify remaining entities still have their components
+    const basic_ref = db.getEntity(basic_entity).?;
+    const moving_ref = db.getEntity(moving_entity).?;
+    
+    try testing.expectEqual(TestPositions.basic.x, basic_ref.get(Position).?.x);
+    try testing.expectEqual(@as(?*Health, null), basic_ref.get(Health));
+    
+    try testing.expectEqual(TestPositions.basic.x, moving_ref.get(Position).?.x);
+    try testing.expectEqual(TestVelocity.moving_right.dx, moving_ref.get(Velocity).?.dx);
+}
+
+test "Database removeEntity - archetype cleanup edge case" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create single entity and remove it
+    const entity_id = try db.createEntity(.{ .position = Position{ .x = 10.0, .y = 20.0 } });
+    try testing.expectEqual(@as(usize, 1), db.archetypes.count());
+    
+    try db.removeEntity(entity_id);
+    
+    // Database should be completely clean
+    try testing.expectEqual(@as(usize, 0), db.archetypes.count());
+    try testing.expectEqual(null, db.getEntity(entity_id));
+    
+    // Should be able to create new entities normally after cleanup
+    const new_entity = try db.createEntity(.{ .position = Position{ .x = 5.0, .y = 15.0 } });
+    try testing.expect(db.getEntity(new_entity) != null);
+    try testing.expectEqual(@as(usize, 1), db.archetypes.count());
+}
+
+test "Database removeEntity - memory safety with complex components" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create entities with large components to test memory management
+    const entity1 = try db.createEntity(.{ 
+        .position = Position{ .x = 1.0, .y = 2.0 },
+        .large_component = LargeComponent{ .data = [_]u8{1} ** 1024, .id = 123 }
+    });
+    
+    const entity2 = try db.createEntity(.{ 
+        .position = Position{ .x = 3.0, .y = 4.0 },
+        .large_component = LargeComponent{ .data = [_]u8{2} ** 1024, .id = 456 }
+    });
+
+    // Verify entities exist and have correct data
+    const entity1_ref = db.getEntity(entity1).?;
+    const entity2_ref = db.getEntity(entity2).?;
+    
+    try testing.expectEqual(@as(u64, 123), entity1_ref.get(LargeComponent).?.id);
+    try testing.expectEqual(@as(u64, 456), entity2_ref.get(LargeComponent).?.id);
+    
+    // Remove first entity
+    try db.removeEntity(entity1);
+    
+    // Second entity should still have correct data (no memory corruption)
+    const entity2_after = db.getEntity(entity2).?;
+    try testing.expectEqual(@as(u64, 456), entity2_after.get(LargeComponent).?.id);
+    try testing.expectEqual(@as(u8, 2), entity2_after.get(LargeComponent).?.data[0]);
+    
+    // Remove second entity - should clean up archetype
+    try db.removeEntity(entity2);
+    try testing.expectEqual(@as(usize, 0), db.archetypes.count());
+}
+
 test "Database removeComponents - remove from entity" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
