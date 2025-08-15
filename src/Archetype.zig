@@ -47,9 +47,9 @@ pub fn getColumn(
     self: *const Archetype,
     component_id: ComponentId,
 ) ?*const ComponentArray {
-    for (self.columns) |column| {
+    for (self.columns) |*column| {
         if (column.meta.id == component_id) {
-            return &column;
+            return column;
         }
     }
     return null;
@@ -139,6 +139,35 @@ pub fn fromComponents(
     const columns_slice = try allocator.dupe(ComponentArray, &columns);
 
     return Archetype.init(allocator, archetype_id, name, columns_slice);
+}
+
+pub fn fromComponentSet(
+    allocator: std.mem.Allocator,
+    component_set: *const root.ComponentSet,
+) !Archetype {
+    const len = component_set.len();
+    if (len == 0) {
+        return error.EmptyComponentSet;
+    }
+
+    // Allocate arrays for component IDs and columns
+    const component_ids = try allocator.alloc(ComponentId, len);
+    const columns = try allocator.alloc(ComponentArray, len);
+
+    // The ComponentSet is already sorted, so we can iterate directly
+    for (component_set.items.items, 0..) |meta, i| {
+        component_ids[i] = meta.id;
+        columns[i] = ComponentArray.initFromType(
+            allocator,
+            meta.id,
+            meta.size,
+            meta.alignment,
+        );
+    }
+
+    const archetype_id = component_set.calculateId();
+
+    return Archetype.init(allocator, archetype_id, component_ids, columns);
 }
 
 pub fn addEntity(

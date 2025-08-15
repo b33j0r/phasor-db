@@ -41,9 +41,9 @@ pub const ComponentMeta = struct {
     }
 
     pub fn eql(self: ComponentMeta, other: ComponentMeta) bool {
-        return self.id == other.id and 
-               self.size == other.size and 
-               self.alignment == other.alignment and 
+        return self.id == other.id and
+               self.size == other.size and
+               self.alignment == other.alignment and
                self.stride == other.stride;
     }
 
@@ -72,7 +72,7 @@ pub const ComponentSet = struct {
 
     pub fn fromComponents(allocator: std.mem.Allocator, comptime components: anytype) !ComponentSet {
         var set = ComponentSet.init(allocator);
-        
+
         const fields = std.meta.fields(@TypeOf(components));
         try set.items.ensureTotalCapacity(allocator, fields.len);
 
@@ -90,19 +90,19 @@ pub const ComponentSet = struct {
     pub fn fromSlice(allocator: std.mem.Allocator, metas: []const ComponentMeta) !ComponentSet {
         var set = ComponentSet.init(allocator);
         try set.items.ensureTotalCapacity(allocator, metas.len);
-        
+
         for (metas) |meta| {
             try set.insertSorted(meta);
         }
-        
+
         return set;
     }
 
-    fn insertSorted(self: *ComponentSet, meta: ComponentMeta) !void {
+    pub fn insertSorted(self: *ComponentSet, meta: ComponentMeta) !void {
         // Binary search for insertion point
         var left: usize = 0;
         var right: usize = self.items.items.len;
-        
+
         while (left < right) {
             const mid = left + (right - left) / 2;
             if (self.items.items[mid].id < meta.id) {
@@ -114,7 +114,7 @@ pub const ComponentSet = struct {
                 return;
             }
         }
-        
+
         try self.items.insert(self.allocator, left, meta);
     }
 
@@ -208,6 +208,49 @@ pub const ComponentSet = struct {
     }
 };
 
+/// Internal buffer structure that manages aligned memory allocation
+    const AlignedBuffer = struct {
+    /// Pointer to the original allocation (for freeing)
+        raw_ptr: ?[*]u8 = null,
+    /// Length of the original allocation
+        raw_len: usize = 0,
+    /// Aligned data slice for component storage
+        data: []u8 = &[_]u8{},
+
+    fn deinit(self: *AlignedBuffer, allocator: std.mem.Allocator) void {
+        if (self.raw_ptr) |ptr| {
+            allocator.free(ptr[0..self.raw_len]);
+        }
+        self.* = .{};
+    }
+
+    fn isEmpty(self: *const AlignedBuffer) bool {
+        return self.raw_ptr == null and self.data.len == 0;
+    }
+
+    fn allocateAligned(
+        self: *AlignedBuffer,
+        allocator: std.mem.Allocator,
+        byte_count: usize,
+        alignment: usize,
+    ) !void {
+        if (byte_count == 0) {
+            return;
+        }
+
+        const extra = if (alignment > 1) alignment - 1 else 0;
+        const raw_allocation = try allocator.alloc(u8, byte_count + extra);
+
+        const raw_addr = @intFromPtr(raw_allocation.ptr);
+        const aligned_addr = std.mem.alignForward(usize, raw_addr, alignment);
+        const offset = aligned_addr - raw_addr;
+
+        self.raw_ptr = raw_allocation.ptr;
+        self.raw_len = raw_allocation.len;
+        self.data = raw_allocation[offset .. offset + byte_count];
+    }
+};
+
 /// `ComponentArray` is a dynamic type-erased array that holds components of a specific type.
 /// It is used to create columns in each `Archetype` table.
 pub const ComponentArray = struct {
@@ -215,7 +258,8 @@ pub const ComponentArray = struct {
     meta: ComponentMeta,
     capacity: usize = 0,
     len: usize = 0,
-    bytes: []u8 = &[_]u8{},
+    /// Combined buffer that handles both raw allocation and aligned data access
+    buffer: AlignedBuffer = .{},
 
     /// Minimum capacity allocated when the array becomes occupied.
     /// This reduces the frequency of reallocations for small arrays.
@@ -256,16 +300,20 @@ pub const ComponentArray = struct {
     }
 
     pub fn deinit(self: *ComponentArray) void {
-        if (self.bytes.len > 0) {
-            self.allocator.free(self.bytes);
-        }
+        self.buffer.deinit(self.allocator);
         self.* = undefined;
     }
 
     pub fn get(self: *const ComponentArray, index: usize, comptime T: type) ?*T {
         if (self.meta.size == 0 or index >= self.len) return null;
         const offset = index * self.meta.stride;
-        return @as(*T, @ptrCast(@alignCast(self.bytes.ptr + offset)));
+        // Ensure the pointer is properly aligned for type T
+        const ptr = self.buffer.data.ptr + offset;
+        if (@intFromPtr(ptr) % @alignOf(T) != 0) {
+            // Memory is not aligned correctly - this should not happen with proper stride calculation
+            return null;
+        }
+        return @as(*T, @ptrCast(@alignCast(ptr)));
     }
 
     pub fn set(self: *ComponentArray, index: usize, value: anytype) !void {
@@ -273,18 +321,35 @@ pub const ComponentArray = struct {
         if (self.meta.size == 0 or index >= self.len) return error.IndexOutOfBounds;
         if (@sizeOf(T) != self.meta.size) return error.TypeMismatch;
         const offset = index * self.meta.stride;
-        @memcpy(self.bytes[offset .. offset + self.meta.size], std.mem.asBytes(&value));
+        @memcpy(self.buffer.data[offset .. offset + self.meta.size], std.mem.asBytes(&value));
     }
 
     pub fn ensureCapacity(self: *ComponentArray, new_capacity: usize) !void {
         if (new_capacity <= self.capacity) return;
 
-        const new_bytes = try self.allocator.alloc(u8, new_capacity * self.meta.stride);
-        if (self.capacity > 0) {
-            @memcpy(new_bytes[0 .. self.len * self.meta.stride], self.bytes[0 .. self.len * self.meta.stride]);
-            self.allocator.free(self.bytes);
+        // If zero-sized component, no backing storage is required
+        if (self.meta.stride == 0) {
+            self.capacity = new_capacity;
+            return;
         }
-        self.bytes = new_bytes;
+
+        const len_bytes: usize = new_capacity * self.meta.stride;
+        const alignment: usize = @intCast(self.meta.alignment);
+
+        // Create new aligned buffer
+        var new_buffer: AlignedBuffer = .{};
+        try new_buffer.allocateAligned(self.allocator, len_bytes, alignment);
+
+        // Copy existing data
+        const copy_len = self.len * self.meta.stride;
+        if (copy_len > 0) {
+            @memcpy(new_buffer.data[0 .. copy_len], self.buffer.data[0 .. copy_len]);
+        }
+
+        // Free previous allocation
+        self.buffer.deinit(self.allocator);
+
+        self.buffer = new_buffer;
         self.capacity = new_capacity;
     }
 
@@ -292,9 +357,14 @@ pub const ComponentArray = struct {
         var better_capacity = self.capacity;
         if (better_capacity >= new_capacity) return;
 
-        while (true) {
-            better_capacity +|= better_capacity / 2 + min_occupied_capacity;
-            if (better_capacity >= new_capacity) break;
+        // Ensure we start with at least min_occupied_capacity
+        if (better_capacity == 0) {
+            better_capacity = min_occupied_capacity;
+        }
+
+        // Grow capacity until it meets or exceeds new_capacity
+        while (better_capacity < new_capacity) {
+            better_capacity = better_capacity * 3 / 2 + min_occupied_capacity;
         }
         return self.ensureCapacity(better_capacity);
     }
@@ -304,7 +374,7 @@ pub const ComponentArray = struct {
         const T = @TypeOf(value);
         if (@sizeOf(T) != self.meta.size) return error.TypeMismatch;
         const offset = self.len * self.meta.stride;
-        @memcpy(self.bytes[offset .. offset + self.meta.size], std.mem.asBytes(&value));
+        @memcpy(self.buffer.data[offset .. offset + self.meta.size], std.mem.asBytes(&value));
         self.len += 1;
     }
 
@@ -321,14 +391,14 @@ pub const ComponentArray = struct {
             const dst_offset = (index + 1) * self.meta.stride;
             const bytes_to_move = (self.len - index) * self.meta.stride;
             std.mem.copyBackwards(u8,
-                self.bytes[dst_offset .. dst_offset + bytes_to_move],
-                self.bytes[src_offset .. src_offset + bytes_to_move]
+                self.buffer.data[dst_offset .. dst_offset + bytes_to_move],
+                self.buffer.data[src_offset .. src_offset + bytes_to_move]
             );
         }
 
         // Insert the new element
         const offset = index * self.meta.stride;
-        @memcpy(self.bytes[offset .. offset + self.meta.size], std.mem.asBytes(&value));
+        @memcpy(self.buffer.data[offset .. offset + self.meta.size], std.mem.asBytes(&value));
         self.len += 1;
     }
 
@@ -344,8 +414,8 @@ pub const ComponentArray = struct {
             const src_offset = (index + 1) * self.meta.stride;
             const bytes_to_move = (self.len - index - 1) * self.meta.stride;
             std.mem.copyForwards(u8,
-                self.bytes[dst_offset .. dst_offset + bytes_to_move],
-                self.bytes[src_offset .. src_offset + bytes_to_move]
+                self.buffer.data[dst_offset .. dst_offset + bytes_to_move],
+                self.buffer.data[src_offset .. src_offset + bytes_to_move]
             );
         }
 
@@ -362,8 +432,8 @@ pub const ComponentArray = struct {
             const dst_offset = index * self.meta.stride;
             const src_offset = (self.len - 1) * self.meta.stride;
             @memcpy(
-                self.bytes[dst_offset .. dst_offset + self.meta.stride],
-                self.bytes[src_offset .. src_offset + self.meta.stride]
+                self.buffer.data[dst_offset .. dst_offset + self.meta.stride],
+                self.buffer.data[src_offset .. src_offset + self.meta.stride]
             );
         }
 
@@ -378,23 +448,35 @@ pub const ComponentArray = struct {
         if (new_capacity >= self.capacity) return;
 
         const actual_capacity = @max(new_capacity, self.len);
+        if (self.meta.stride == 0) {
+            self.capacity = actual_capacity;
+            return;
+        }
+
         if (actual_capacity == 0) {
-            if (self.bytes.len > 0) {
-                self.allocator.free(self.bytes);
-                self.bytes = &[_]u8{};
-            }
+            self.buffer.deinit(self.allocator);
+            self.buffer = .{};
             self.capacity = 0;
             return;
         }
 
-        const new_bytes = try self.allocator.alloc(u8, actual_capacity * self.meta.stride);
-        @memcpy(new_bytes[0 .. self.len * self.meta.stride], self.bytes[0 .. self.len * self.meta.stride]);
+        const len_bytes: usize = actual_capacity * self.meta.stride;
+        const alignment: usize = @intCast(self.meta.alignment);
 
-        if (self.bytes.len > 0) {
-            self.allocator.free(self.bytes);
+        // Create new aligned buffer
+        var new_buffer: AlignedBuffer = .{};
+        try new_buffer.allocateAligned(self.allocator, len_bytes, alignment);
+
+        // Copy existing data
+        const copy_len = self.len * self.meta.stride;
+        if (copy_len > 0) {
+            @memcpy(new_buffer.data[0 .. copy_len], self.buffer.data[0 .. copy_len]);
         }
 
-        self.bytes = new_bytes;
+        // Free previous allocation
+        self.buffer.deinit(self.allocator);
+
+        self.buffer = new_buffer;
         self.capacity = actual_capacity;
     }
 };
