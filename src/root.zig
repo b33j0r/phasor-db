@@ -7,8 +7,7 @@ pub const componentId = components.componentId;
 pub const ComponentId = components.ComponentId;
 pub const ComponentArray = components.ComponentArray;
 
-pub const archetypes = @import("archetypes.zig");
-pub const Archetype = archetypes.Archetype;
+pub const Archetype = @import("Archetype.zig");
 
 pub const Database = @import("Database.zig");
 
