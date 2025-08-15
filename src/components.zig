@@ -13,14 +13,206 @@ pub fn componentId(comptime T: anytype) ComponentId {
     return hasher.final();
 }
 
-/// `ComponentArray` is a dynamic type-erased array that holds components of a specific type.
-/// It is used to create columns in each `Archetype` table.
-pub const ComponentArray = struct {
-    allocator: std.mem.Allocator,
+/// `ComponentMeta` contains the metadata for a component type.
+/// This was extracted from `ComponentArray` to enable better archetype management.
+pub const ComponentMeta = struct {
     id: ComponentId,
     size: usize,
     alignment: u29,
     stride: usize,
+
+    pub fn init(id: ComponentId, size: usize, alignment: u29) ComponentMeta {
+        const stride = if (size == 0) 0 else std.mem.alignForward(usize, size, alignment);
+        return ComponentMeta{
+            .id = id,
+            .size = size,
+            .alignment = alignment,
+            .stride = stride,
+        };
+    }
+
+    pub fn from(comptime T: anytype) ComponentMeta {
+        const ComponentT = if (@TypeOf(T) == type) T else @TypeOf(T);
+        return ComponentMeta.init(
+            componentId(ComponentT),
+            @sizeOf(ComponentT),
+            @alignOf(ComponentT),
+        );
+    }
+
+    pub fn eql(self: ComponentMeta, other: ComponentMeta) bool {
+        return self.id == other.id and 
+               self.size == other.size and 
+               self.alignment == other.alignment and 
+               self.stride == other.stride;
+    }
+
+    pub fn lessThan(self: ComponentMeta, other: ComponentMeta) bool {
+        return self.id < other.id;
+    }
+};
+
+/// `ComponentSet` is a sorted, no-duplicates container of ComponentMeta.
+/// It supports set operations like union and difference for archetype management.
+pub const ComponentSet = struct {
+    allocator: std.mem.Allocator,
+    items: std.ArrayListUnmanaged(ComponentMeta),
+
+    pub fn init(allocator: std.mem.Allocator) ComponentSet {
+        return ComponentSet{
+            .allocator = allocator,
+            .items = .empty,
+        };
+    }
+
+    pub fn deinit(self: *ComponentSet) void {
+        self.items.deinit(self.allocator);
+        self.* = undefined;
+    }
+
+    pub fn fromComponents(allocator: std.mem.Allocator, comptime components: anytype) !ComponentSet {
+        var set = ComponentSet.init(allocator);
+        
+        const fields = std.meta.fields(@TypeOf(components));
+        try set.items.ensureTotalCapacity(allocator, fields.len);
+
+        // Create ComponentMeta for each component and add to set
+        inline for (fields) |field| {
+            const component_value = @field(components, field.name);
+            const ComponentT = @TypeOf(component_value);
+            const meta = ComponentMeta.from(ComponentT);
+            try set.insertSorted(meta);
+        }
+
+        return set;
+    }
+
+    pub fn fromSlice(allocator: std.mem.Allocator, metas: []const ComponentMeta) !ComponentSet {
+        var set = ComponentSet.init(allocator);
+        try set.items.ensureTotalCapacity(allocator, metas.len);
+        
+        for (metas) |meta| {
+            try set.insertSorted(meta);
+        }
+        
+        return set;
+    }
+
+    fn insertSorted(self: *ComponentSet, meta: ComponentMeta) !void {
+        // Binary search for insertion point
+        var left: usize = 0;
+        var right: usize = self.items.items.len;
+        
+        while (left < right) {
+            const mid = left + (right - left) / 2;
+            if (self.items.items[mid].id < meta.id) {
+                left = mid + 1;
+            } else if (self.items.items[mid].id > meta.id) {
+                right = mid;
+            } else {
+                // Already exists, no need to insert
+                return;
+            }
+        }
+        
+        try self.items.insert(self.allocator, left, meta);
+    }
+
+    pub fn setUnion(self: *const ComponentSet, other: *const ComponentSet) !ComponentSet {
+        var result = ComponentSet.init(self.allocator);
+        try result.items.ensureTotalCapacity(self.allocator, self.items.items.len + other.items.items.len);
+
+        var i: usize = 0;
+        var j: usize = 0;
+
+        // Merge two sorted arrays, avoiding duplicates
+        while (i < self.items.items.len and j < other.items.items.len) {
+            const self_meta = self.items.items[i];
+            const other_meta = other.items.items[j];
+
+            if (self_meta.id < other_meta.id) {
+                result.items.appendAssumeCapacity(self_meta);
+                i += 1;
+            } else if (self_meta.id > other_meta.id) {
+                result.items.appendAssumeCapacity(other_meta);
+                j += 1;
+            } else {
+                // Equal IDs - add only once
+                result.items.appendAssumeCapacity(self_meta);
+                i += 1;
+                j += 1;
+            }
+        }
+
+        // Add remaining elements
+        while (i < self.items.items.len) {
+            result.items.appendAssumeCapacity(self.items.items[i]);
+            i += 1;
+        }
+        while (j < other.items.items.len) {
+            result.items.appendAssumeCapacity(other.items.items[j]);
+            j += 1;
+        }
+
+        return result;
+    }
+
+    pub fn setDifference(self: *const ComponentSet, other: *const ComponentSet) !ComponentSet {
+        var result = ComponentSet.init(self.allocator);
+        try result.items.ensureTotalCapacity(self.allocator, self.items.items.len);
+
+        var i: usize = 0;
+        var j: usize = 0;
+
+        // Elements in self but not in other
+        while (i < self.items.items.len and j < other.items.items.len) {
+            const self_meta = self.items.items[i];
+            const other_meta = other.items.items[j];
+
+            if (self_meta.id < other_meta.id) {
+                result.items.appendAssumeCapacity(self_meta);
+                i += 1;
+            } else if (self_meta.id > other_meta.id) {
+                j += 1;
+            } else {
+                // Equal IDs - skip both
+                i += 1;
+                j += 1;
+            }
+        }
+
+        // Add remaining elements from self
+        while (i < self.items.items.len) {
+            result.items.appendAssumeCapacity(self.items.items[i]);
+            i += 1;
+        }
+
+        return result;
+    }
+
+    pub fn calculateId(self: *const ComponentSet) u64 {
+        var hasher = std.hash.Wyhash.init(0);
+        for (self.items.items) |meta| {
+            hasher.update(std.mem.asBytes(&meta.id));
+        }
+        return hasher.final();
+    }
+
+    pub fn len(self: *const ComponentSet) usize {
+        return self.items.items.len;
+    }
+
+    pub fn get(self: *const ComponentSet, index: usize) ?ComponentMeta {
+        if (index >= self.items.items.len) return null;
+        return self.items.items[index];
+    }
+};
+
+/// `ComponentArray` is a dynamic type-erased array that holds components of a specific type.
+/// It is used to create columns in each `Archetype` table.
+pub const ComponentArray = struct {
+    allocator: std.mem.Allocator,
+    meta: ComponentMeta,
     capacity: usize = 0,
     len: usize = 0,
     bytes: []u8 = &[_]u8{},
@@ -31,18 +223,22 @@ pub const ComponentArray = struct {
 
     pub fn init(
         allocator: std.mem.Allocator,
+        meta: ComponentMeta,
+    ) ComponentArray {
+        return ComponentArray{
+            .allocator = allocator,
+            .meta = meta,
+        };
+    }
+
+    pub fn initFromType(
+        allocator: std.mem.Allocator,
         id: ComponentId,
         size: usize,
         alignment: u29,
     ) ComponentArray {
-        const stride = if (size == 0) 0 else std.mem.alignForward(usize, size, alignment);
-        return ComponentArray{
-            .allocator = allocator,
-            .id = id,
-            .size = size,
-            .alignment = alignment,
-            .stride = stride,
-        };
+        const meta = ComponentMeta.init(id, size, alignment);
+        return ComponentArray.init(allocator, meta);
     }
 
     pub fn from(
@@ -51,12 +247,8 @@ pub const ComponentArray = struct {
     ) !ComponentArray {
         const hasValue = @TypeOf(T) != type;
         const ComponentT = if (hasValue) @TypeOf(T) else T;
-        var component_array = ComponentArray.init(
-            allocator,
-            componentId(ComponentT),
-            @sizeOf(ComponentT),
-            @alignOf(ComponentT),
-        );
+        const meta = ComponentMeta.from(ComponentT);
+        var component_array = ComponentArray.init(allocator, meta);
         if (hasValue) {
             try component_array.append(T);
         }
@@ -71,25 +263,25 @@ pub const ComponentArray = struct {
     }
 
     pub fn get(self: *const ComponentArray, index: usize, comptime T: type) ?*T {
-        if (self.size == 0 or index >= self.len) return null;
-        const offset = index * self.stride;
+        if (self.meta.size == 0 or index >= self.len) return null;
+        const offset = index * self.meta.stride;
         return @as(*T, @ptrCast(@alignCast(self.bytes.ptr + offset)));
     }
 
     pub fn set(self: *ComponentArray, index: usize, value: anytype) !void {
         const T = @TypeOf(value);
-        if (self.size == 0 or index >= self.len) return error.IndexOutOfBounds;
-        if (@sizeOf(T) != self.size) return error.TypeMismatch;
-        const offset = index * self.stride;
-        @memcpy(self.bytes[offset .. offset + self.size], std.mem.asBytes(&value));
+        if (self.meta.size == 0 or index >= self.len) return error.IndexOutOfBounds;
+        if (@sizeOf(T) != self.meta.size) return error.TypeMismatch;
+        const offset = index * self.meta.stride;
+        @memcpy(self.bytes[offset .. offset + self.meta.size], std.mem.asBytes(&value));
     }
 
     pub fn ensureCapacity(self: *ComponentArray, new_capacity: usize) !void {
         if (new_capacity <= self.capacity) return;
 
-        const new_bytes = try self.allocator.alloc(u8, new_capacity * self.stride);
+        const new_bytes = try self.allocator.alloc(u8, new_capacity * self.meta.stride);
         if (self.capacity > 0) {
-            @memcpy(new_bytes[0 .. self.len * self.stride], self.bytes[0 .. self.len * self.stride]);
+            @memcpy(new_bytes[0 .. self.len * self.meta.stride], self.bytes[0 .. self.len * self.meta.stride]);
             self.allocator.free(self.bytes);
         }
         self.bytes = new_bytes;
@@ -110,9 +302,9 @@ pub const ComponentArray = struct {
     pub fn append(self: *ComponentArray, value: anytype) !void {
         try self.ensureTotalCapacity(self.len + 1);
         const T = @TypeOf(value);
-        if (@sizeOf(T) != self.size) return error.TypeMismatch;
-        const offset = self.len * self.stride;
-        @memcpy(self.bytes[offset .. offset + self.size], std.mem.asBytes(&value));
+        if (@sizeOf(T) != self.meta.size) return error.TypeMismatch;
+        const offset = self.len * self.meta.stride;
+        @memcpy(self.bytes[offset .. offset + self.meta.size], std.mem.asBytes(&value));
         self.len += 1;
     }
 
@@ -121,13 +313,13 @@ pub const ComponentArray = struct {
 
         try self.ensureTotalCapacity(self.len + 1);
         const T = @TypeOf(value);
-        if (@sizeOf(T) != self.size) return error.TypeMismatch;
+        if (@sizeOf(T) != self.meta.size) return error.TypeMismatch;
 
         // Shift elements to the right
         if (index < self.len) {
-            const src_offset = index * self.stride;
-            const dst_offset = (index + 1) * self.stride;
-            const bytes_to_move = (self.len - index) * self.stride;
+            const src_offset = index * self.meta.stride;
+            const dst_offset = (index + 1) * self.meta.stride;
+            const bytes_to_move = (self.len - index) * self.meta.stride;
             std.mem.copyBackwards(u8,
                 self.bytes[dst_offset .. dst_offset + bytes_to_move],
                 self.bytes[src_offset .. src_offset + bytes_to_move]
@@ -135,8 +327,8 @@ pub const ComponentArray = struct {
         }
 
         // Insert the new element
-        const offset = index * self.stride;
-        @memcpy(self.bytes[offset .. offset + self.size], std.mem.asBytes(&value));
+        const offset = index * self.meta.stride;
+        @memcpy(self.bytes[offset .. offset + self.meta.size], std.mem.asBytes(&value));
         self.len += 1;
     }
 
@@ -148,9 +340,9 @@ pub const ComponentArray = struct {
 
         // Shift elements to the left - use copyBackwards for overlapping memory
         if (index < self.len - 1) {
-            const dst_offset = index * self.stride;
-            const src_offset = (index + 1) * self.stride;
-            const bytes_to_move = (self.len - index - 1) * self.stride;
+            const dst_offset = index * self.meta.stride;
+            const src_offset = (index + 1) * self.meta.stride;
+            const bytes_to_move = (self.len - index - 1) * self.meta.stride;
             std.mem.copyForwards(u8,
                 self.bytes[dst_offset .. dst_offset + bytes_to_move],
                 self.bytes[src_offset .. src_offset + bytes_to_move]
@@ -167,11 +359,11 @@ pub const ComponentArray = struct {
         if (index >= self.len) return;
 
         if (index != self.len - 1) {
-            const dst_offset = index * self.stride;
-            const src_offset = (self.len - 1) * self.stride;
+            const dst_offset = index * self.meta.stride;
+            const src_offset = (self.len - 1) * self.meta.stride;
             @memcpy(
-                self.bytes[dst_offset .. dst_offset + self.stride],
-                self.bytes[src_offset .. src_offset + self.stride]
+                self.bytes[dst_offset .. dst_offset + self.meta.stride],
+                self.bytes[src_offset .. src_offset + self.meta.stride]
             );
         }
 
@@ -195,8 +387,8 @@ pub const ComponentArray = struct {
             return;
         }
 
-        const new_bytes = try self.allocator.alloc(u8, actual_capacity * self.stride);
-        @memcpy(new_bytes[0 .. self.len * self.stride], self.bytes[0 .. self.len * self.stride]);
+        const new_bytes = try self.allocator.alloc(u8, actual_capacity * self.meta.stride);
+        @memcpy(new_bytes[0 .. self.len * self.meta.stride], self.bytes[0 .. self.len * self.meta.stride]);
 
         if (self.bytes.len > 0) {
             self.allocator.free(self.bytes);
@@ -205,10 +397,4 @@ pub const ComponentArray = struct {
         self.bytes = new_bytes;
         self.capacity = actual_capacity;
     }
-};
-
-/// `ComponentSet` is a set of `Component.Id` values that represents the components
-/// associated with an archetype.
-pub const ComponentSet = struct {
-
 };

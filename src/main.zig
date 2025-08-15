@@ -16,7 +16,7 @@ pub fn main() !void{
     var db = ecs.Database.init(allocator);
     defer db.deinit();
 
-    const entity = db.createEntity(.{
+    const entity = try db.createEntity(.{
         Position{ .x = 0.0, .y = 0.0 },
         Velocity{ .x = 1.0, .y = 1.0 },
     });

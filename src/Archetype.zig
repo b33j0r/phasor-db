@@ -48,7 +48,7 @@ pub fn getColumn(
     component_id: ComponentId,
 ) ?*const ComponentArray {
     for (self.columns) |column| {
-        if (column.id == component_id) {
+        if (column.meta.id == component_id) {
             return &column;
         }
     }
@@ -60,7 +60,7 @@ pub fn getColumnIndexById(
     component_id: ComponentId,
 ) ?usize {
     for (self.columns, 0..) |column, index| {
-        if (column.id == component_id) {
+        if (column.meta.id == component_id) {
             return index;
         }
     }
@@ -105,72 +105,6 @@ pub fn calculateId(comptime components: anytype) Id {
     return hasher.final();
 }
 
-/// Calculates the union of this archetype's component IDs with the provided
-/// components. For example, if an archetype has components [A, B, C] and the
-/// provided components are [B, D], the resulting ID set will be [A, B, C, D].
-pub fn calculateIdSetUnion(self: *const Archetype, comptime components: anytype) Id {
-    const new_sorted_ids = comptime getSortedComponentIds(components);
-
-    // Create a buffer to hold the union of component IDs
-    // Maximum size is the sum of both sets
-    const max_size = self.name.len + new_sorted_ids.len;
-    var union_ids = self.allocator.alloc(
-        ComponentId,
-        max_size,
-    ) catch |err| switch (err) {
-        error.OutOfMemory => @panic("Out of memory in calculateIdSetUnion"),
-    };
-    defer self.allocator.free(union_ids);
-
-    var union_count: usize = 0;
-
-    // Merge the two sorted arrays, avoiding duplicates
-    var existing_index: usize = 0;
-    var new_index: usize = 0;
-
-    while (existing_index < self.name.len and new_index < new_sorted_ids.len) {
-        const existing_id = self.name[existing_index];
-        const new_id = new_sorted_ids[new_index];
-
-        if (existing_id < new_id) {
-            union_ids[union_count] = existing_id;
-            union_count += 1;
-            existing_index += 1;
-        } else if (existing_id > new_id) {
-            union_ids[union_count] = new_id;
-            union_count += 1;
-            new_index += 1;
-        } else {
-            // Equal IDs - add only once and advance both indices
-            union_ids[union_count] = existing_id;
-            union_count += 1;
-            existing_index += 1;
-            new_index += 1;
-        }
-    }
-
-    // Add remaining elements from existing archetype
-    while (existing_index < self.name.len) {
-        union_ids[union_count] = self.name[existing_index];
-        union_count += 1;
-        existing_index += 1;
-    }
-
-    // Add remaining elements from new components
-    while (new_index < new_sorted_ids.len) {
-        union_ids[union_count] = new_sorted_ids[new_index];
-        union_count += 1;
-        new_index += 1;
-    }
-
-    // Hash the merged component IDs
-    var hasher = std.hash.Wyhash.init(0);
-    for (union_ids[0..union_count]) |comp_id| {
-        hasher.update(std.mem.asBytes(&comp_id));
-    }
-    return hasher.final();
-}
-
 pub fn fromComponents(
     allocator: std.mem.Allocator,
     comptime components: anytype,
@@ -189,7 +123,7 @@ pub fn fromComponents(
             const ComponentType = @TypeOf(component_value);
             if (componentId(ComponentType) == target_id) {
                 component_ids[i] = target_id;
-                columns[i] = ComponentArray.init(
+                columns[i] = ComponentArray.initFromType(
                     allocator,
                     target_id,
                     @sizeOf(ComponentType),

@@ -2,6 +2,8 @@ const std = @import("std");
 const root = @import("root.zig");
 const Entity = root.Entity;
 const Archetype = root.Archetype;
+const ComponentSet = root.ComponentSet;
+const ComponentMeta = root.ComponentMeta;
 
 allocator: std.mem.Allocator,
 archetypes: std.AutoArrayHashMapUnmanaged(Archetype.Id, Archetype) = .empty,
@@ -31,10 +33,10 @@ pub fn removeEntity(self: *Database, entity_id: Entity.Id) !void {
     std.debug.assert(entity.id == entity_id, "Entity ID mismatch");
 
     // Get the archetype and row index for this entity
-    const archetype = self.archetypes.get(entity.archetype_id) orelse return error.ArchetypeNotFound;
+    const archetype = self.archetypes.getPtr(entity.archetype_id) orelse return error.ArchetypeNotFound;
 
     // Remove the entity from the archetype
-    try archetype.removeEntity(self.allocator, entity.row_index, entity_id);
+    _ = try archetype.removeEntityByIndex(entity.index);
 }
 
 pub fn createEntity(self: *Database, components: anytype) !Entity.Id {
@@ -58,8 +60,9 @@ pub fn createEntity(self: *Database, components: anytype) !Entity.Id {
     // Create and store the Entity record that tracks which archetype and row this entity is in
     const entity = Entity{
         .id = entity_id,
+        .database = self,
         .archetype_id = archetype_id,
-        .index = entity_index,  // Row index within the archetype
+        .row_index = entity_index,  // Row index within the archetype
     };
 
     try self.entities.put(self.allocator, entity_id, entity);
@@ -67,14 +70,47 @@ pub fn createEntity(self: *Database, components: anytype) !Entity.Id {
     return entity_id;
 }
 
-// pub fn addComponents(
-//     self: *Database,
-//     entity_id: Entity.Id,
-//     components: anytype,
-// ) !void {
-//     const entity = self.entities.get(entity_id) orelse return error.EntityNotFound;
-//     const src_archetype = self.archetypes.getPtr(entity.archetype_id).?;
-//     const src_index = entity.row_index;
-//
-//
-// }
+pub fn addComponents(
+    self: *Database,
+    entity_id: Entity.Id,
+    components: anytype,
+) !void {
+    const entity = self.entities.get(entity_id) orelse return error.EntityNotFound;
+    const src_archetype = self.archetypes.getPtr(entity.archetype_id).?;
+
+    // Create ComponentSet from existing archetype components
+    var existing_set = ComponentSet.init(self.allocator);
+    defer existing_set.deinit();
+    
+    for (src_archetype.columns) |column| {
+        try existing_set.insertSorted(column.meta);
+    }
+
+    // Create ComponentSet from new components to add
+    const new_set = try ComponentSet.fromComponents(self.allocator, components);
+    defer new_set.deinit();
+
+    // Create union of existing and new components
+    const union_set = try existing_set.setUnion(&new_set);
+    defer union_set.deinit();
+
+    // Calculate new archetype ID
+    const new_archetype_id = union_set.calculateId();
+
+    // If the new archetype is the same as the current one, no need to move
+    if (new_archetype_id == entity.archetype_id) {
+        return; // Entity already has these components
+    }
+
+    // Get or create the new archetype
+    const new_archetype = self.archetypes.getPtr(new_archetype_id);
+    if (new_archetype == null) {
+        // TODO: Need to implement Archetype.fromComponentSet
+        // For now, return an error
+        return error.ArchetypeCreationNotImplemented;
+    }
+
+    // TODO: Move entity data from source archetype to destination archetype
+    // This requires copying component data and updating entity record
+    return error.EntityMoveNotImplemented;
+}

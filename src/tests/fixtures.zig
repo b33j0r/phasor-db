@@ -29,7 +29,7 @@ pub const LargeComponent = struct {
 
 /// Helper function for creating test arrays
 pub fn createPositionArray(allocator: std.mem.Allocator) ComponentArray {
-    return ComponentArray.init(
+    return ComponentArray.initFromType(
         allocator,
         componentId(Position),
         @sizeOf(Position),
@@ -39,7 +39,7 @@ pub fn createPositionArray(allocator: std.mem.Allocator) ComponentArray {
 
 /// Helper function for creating test arrays
 pub fn createHealthArray(allocator: std.mem.Allocator) ComponentArray {
-    return ComponentArray.init(
+    return ComponentArray.initFromType(
         allocator,
         componentId(Health),
         @sizeOf(Health),
@@ -49,7 +49,7 @@ pub fn createHealthArray(allocator: std.mem.Allocator) ComponentArray {
 
 /// Helper function for creating test arrays
 pub fn createMarkerArray(allocator: std.mem.Allocator) ComponentArray {
-    return ComponentArray.init(
+    return ComponentArray.initFromType(
         allocator,
         componentId(Marker),
         @sizeOf(Marker),
@@ -59,7 +59,7 @@ pub fn createMarkerArray(allocator: std.mem.Allocator) ComponentArray {
 
 /// Test fixture for creating and populating arrays
 pub fn createPopulatedArray(allocator: std.mem.Allocator, comptime T: type, items: []const T) !ComponentArray {
-    var array = ComponentArray.init(
+    var array = ComponentArray.initFromType(
         allocator,
         componentId(T),
         @sizeOf(T),

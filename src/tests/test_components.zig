@@ -61,10 +61,10 @@ test "ComponentArray initialization and deinitialization" {
     var pos_array = createPositionArray(allocator);
     defer pos_array.deinit();
 
-    try testing.expectEqual(componentId(Position), pos_array.id);
-    try testing.expectEqual(@sizeOf(Position), pos_array.size);
-    try testing.expectEqual(@alignOf(Position), pos_array.alignment);
-    try testing.expectEqual(std.mem.alignForward(usize, @sizeOf(Position), @alignOf(Position)), pos_array.stride);
+    try testing.expectEqual(componentId(Position), pos_array.meta.id);
+    try testing.expectEqual(@sizeOf(Position), pos_array.meta.size);
+    try testing.expectEqual(@alignOf(Position), pos_array.meta.alignment);
+    try testing.expectEqual(std.mem.alignForward(usize, @sizeOf(Position), @alignOf(Position)), pos_array.meta.stride);
     try testing.expectEqual(@as(usize, 0), pos_array.capacity);
     try testing.expectEqual(@as(usize, 0), pos_array.len);
 }
@@ -77,9 +77,9 @@ test "ComponentArray from type with value" {
     });
     defer array.deinit();
 
-    try testing.expectEqual(componentId(Position), array.id);
-    try testing.expectEqual(@sizeOf(Position), array.size);
-    try testing.expectEqual(@alignOf(Position), array.alignment);
+    try testing.expectEqual(componentId(Position), array.meta.id);
+    try testing.expectEqual(@sizeOf(Position), array.meta.size);
+    try testing.expectEqual(@alignOf(Position), array.meta.alignment);
     try testing.expectEqual(@as(usize, 1), array.len);
     try testing.expectEqual(@as(usize, ComponentArray.min_occupied_capacity), array.capacity);
 
@@ -95,8 +95,8 @@ test "ComponentArray zero-sized type handling" {
     var empty_array = createMarkerArray(allocator);
     defer empty_array.deinit();
 
-    try testing.expectEqual(@as(usize, 0), empty_array.size);
-    try testing.expectEqual(@as(usize, 0), empty_array.stride);
+    try testing.expectEqual(@as(usize, 0), empty_array.meta.size);
+    try testing.expectEqual(@as(usize, 0), empty_array.meta.stride);
 }
 
 test "ComponentArray append and get operations" {
@@ -344,7 +344,7 @@ test "ComponentArray zero-sized component operations" {
 
 test "ComponentArray large component handling" {
     const allocator = testing.allocator;
-    var large_array = ComponentArray.init(
+    var large_array = ComponentArray.initFromType(
         allocator,
         componentId(LargeComponent),
         @sizeOf(LargeComponent),
@@ -383,8 +383,8 @@ test "ComponentArray memory alignment correctness" {
     try testing.expect(@intFromPtr(ptr2) % @alignOf(Position) == 0);
 
     // Verify stride calculation includes alignment
-    try testing.expect(pos_array.stride >= @sizeOf(Position));
-    try testing.expect(pos_array.stride % @alignOf(Position) == 0);
+    try testing.expect(pos_array.meta.stride >= @sizeOf(Position));
+    try testing.expect(pos_array.meta.stride % @alignOf(Position) == 0);
 }
 
 test "ComponentArray stress test with many operations" {

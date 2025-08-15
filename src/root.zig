@@ -6,6 +6,8 @@ pub const components = @import("components.zig");
 pub const componentId = components.componentId;
 pub const ComponentId = components.ComponentId;
 pub const ComponentArray = components.ComponentArray;
+pub const ComponentMeta = components.ComponentMeta;
+pub const ComponentSet = components.ComponentSet;
 
 pub const Archetype = @import("Archetype.zig");
 
