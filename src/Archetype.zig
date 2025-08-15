@@ -183,3 +183,22 @@ pub fn addEntity(
 
     return entity_index;
 }
+
+pub fn removeEntityByIndex(
+    self: *Archetype,
+    entity_index: usize,
+) !Entity.Id {
+    if (entity_index >= self.entity_ids.items.len) {
+        return error.IndexOutOfBounds;
+    }
+
+    // Remove the entity ID from the list
+    const entity_id = self.entity_ids.swapRemove(entity_index);
+
+    // Remove component data from each column
+    for (self.columns) |*column| {
+        column.swapRemove(entity_index);
+    }
+
+    return entity_id;
+}
