@@ -9,6 +9,7 @@ const Archetype = root.Archetype;
 
 const fixtures = @import("fixtures.zig");
 const Position = fixtures.Position;
+const Velocity = fixtures.Velocity;
 const Health = fixtures.Health;
 const Marker = fixtures.Marker;
 const LargeComponent = fixtures.LargeComponent;
@@ -63,6 +64,152 @@ test "Archetype calculateId" {
 
     try testing.expectEqual(archetype_id, archetype.id);
 
+}
+
+test "Archetype calculateIdSetUnion" {
+    const allocator = std.testing.allocator;
+
+    // Test case 1: Union with no duplicates
+    {
+        // Create archetype with Position and Health
+        var archetype = try Archetype.fromComponents(allocator, .{
+            .position = Position{ .x = 0, .y = 0 },
+            .health = Health{ .current = 100, .max = 100 },
+        });
+        defer archetype.deinit();
+
+        // Calculate union with Velocity and Marker (no overlap)
+        const union_id = archetype.calculateIdSetUnion(.{
+            .velocity = Velocity{ .dx = 1.0, .dy = 1.0 },
+            .marker = Marker{},
+        });
+
+        // Calculate expected ID by creating archetype with all components
+        const expected_id = Archetype.calculateId(.{
+            .position = Position{ .x = 0, .y = 0 },
+            .health = Health{ .current = 100, .max = 100 },
+            .velocity = Velocity{ .dx = 1.0, .dy = 1.0 },
+            .marker = Marker{},
+        });
+
+        try std.testing.expectEqual(expected_id, union_id);
+    }
+
+    // Test case 2: Union with duplicates
+    {
+        // Create archetype with Position, Health, and Marker
+        var archetype = try Archetype.fromComponents(allocator, .{
+            .position = Position{ .x = 0, .y = 0 },
+            .health = Health{ .current = 100, .max = 100 },
+            .marker = Marker{},
+        });
+        defer archetype.deinit();
+
+        // Calculate union with Health and Velocity (Health is duplicate)
+        const union_id = archetype.calculateIdSetUnion(.{
+            .health = Health{ .current = 50, .max = 75 }, // Duplicate
+            .velocity = Velocity{ .dx = 1.0, .dy = 1.0 }, // New
+        });
+
+        // Expected result should have Position, Health, Marker, Velocity (Health only once)
+        const expected_id = Archetype.calculateId(.{
+            .position = Position{ .x = 0, .y = 0 },
+            .health = Health{ .current = 100, .max = 100 },
+            .marker = Marker{},
+            .velocity = Velocity{ .dx = 1.0, .dy = 1.0 },
+        });
+
+        try std.testing.expectEqual(expected_id, union_id);
+    }
+
+    // Test case 3: Union with all duplicates
+    {
+        // Create archetype with Position and Health
+        var archetype = try Archetype.fromComponents(allocator, .{
+            .position = Position{ .x = 10, .y = 20 },
+            .health = Health{ .current = 80, .max = 100 },
+        });
+        defer archetype.deinit();
+
+        // Calculate union with same components (all duplicates)
+        const union_id = archetype.calculateIdSetUnion(.{
+            .position = Position{ .x = 5, .y = 15 }, // Different values, same type
+            .health = Health{ .current = 60, .max = 90 }, // Different values, same type
+        });
+
+        // Expected result should be the same as the original archetype ID
+        try std.testing.expectEqual(archetype.id, union_id);
+    }
+
+    // Test case 4: Union with empty components
+    {
+        // Create archetype with Position
+        var archetype = try Archetype.fromComponents(allocator, .{
+            .position = Position{ .x = 1, .y = 2 },
+        });
+        defer archetype.deinit();
+
+        // Calculate union with empty struct (should add it)
+        const union_id = archetype.calculateIdSetUnion(.{
+            .marker = Marker{},
+        });
+
+        // Expected result should have Position and Marker
+        const expected_id = Archetype.calculateId(.{
+            .position = Position{ .x = 1, .y = 2 },
+            .marker = Marker{},
+        });
+
+        try std.testing.expectEqual(expected_id, union_id);
+    }
+
+    // Test case 5: Single component archetype with single new component
+    {
+        // Create archetype with just Marker
+        var archetype = try Archetype.fromComponents(allocator, .{
+            .marker = Marker{},
+        });
+        defer archetype.deinit();
+
+        // Calculate union with Position
+        const union_id = archetype.calculateIdSetUnion(.{
+            .position = Position{ .x = 3, .y = 4 },
+        });
+
+        // Expected result should have Marker and Position
+        const expected_id = Archetype.calculateId(.{
+            .marker = Marker{},
+            .position = Position{ .x = 3, .y = 4 },
+        });
+
+        try std.testing.expectEqual(expected_id, union_id);
+    }
+
+    // Test case 6: Verify component order doesn't matter
+    {
+        // Create archetype with components in one order
+        var archetype = try Archetype.fromComponents(allocator, .{
+            .velocity = Velocity{ .dx = 1, .dy = 2 },
+            .position = Position{ .x = 5, .y = 6 },
+        });
+        defer archetype.deinit();
+
+        // Calculate union with components in different order
+        const union_id = archetype.calculateIdSetUnion(.{
+            .marker = Marker{},
+            .health = Health{ .current = 30, .max = 50 },
+        });
+
+        // Expected result (order shouldn't matter due to sorting)
+        const expected_id = Archetype.calculateId(.{
+            .health = Health{ .current = 30, .max = 50 },
+            .marker = Marker{},
+            .position = Position{ .x = 5, .y = 6 },
+            .velocity = Velocity{ .dx = 1, .dy = 2 },
+        });
+
+        try std.testing.expectEqual(expected_id, union_id);
+    }
 }
 
 test "Archetype create with different order of components is the same" {

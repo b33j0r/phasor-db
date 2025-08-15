@@ -10,6 +10,11 @@ pub const Position = struct {
     y: f32,
 };
 
+pub const Velocity = struct {
+    dx: f32,
+    dy: f32,
+};
+
 pub const Health = struct {
     current: i32,
     max: i32,
