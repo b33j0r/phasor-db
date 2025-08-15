@@ -206,3 +206,9 @@ pub const ComponentArray = struct {
         self.capacity = actual_capacity;
     }
 };
+
+/// `ComponentSet` is a set of `Component.Id` values that represents the components
+/// associated with an archetype.
+pub const ComponentSet = struct {
+
+};

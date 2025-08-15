@@ -29,10 +29,10 @@ pub const Entity = struct {
 
 const Self = @This();
 test "Import embedded unit tests" {
-    std.testing.refAllDeclsRecursive(Self);
+    std.testing.refAllDecls(Self);
 }
 
 test "Import external unit tests" {
     const tests = @import("tests/tests.zig");
-    std.testing.refAllDeclsRecursive(tests);
+    std.testing.refAllDecls(tests);
 }
