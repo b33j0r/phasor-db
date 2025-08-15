@@ -54,3 +54,27 @@ pub fn createEntity(self: *Database, components: anytype) !Entity.Id {
 pub fn getEntity(self: *Database, id: Entity.Id) ?Entity {
     return self.entities.get(id);
 }
+
+pub fn removeEntity(self: *Database, entity_id: Entity.Id) !void {
+    const entity = self.entities.get(entity_id) orelse return error.EntityNotFound;
+
+    std.debug.assert(entity.id == entity_id, "Entity ID mismatch");
+
+    // Get the archetype and row index for this entity
+    const archetype = self.archetypes.get(entity.archetype_id) orelse return error.ArchetypeNotFound;
+
+    // Remove the entity from the archetype
+    try archetype.removeEntity(self.allocator, entity.row_index, entity_id);
+}
+
+// fn moveEntity(
+//     db: *Database,
+//     src: *Archetype, dst: *Archetype,
+//     src_row: usize,
+//     entity_id: Entity.Id,
+// ) !usize { // returns dst_row
+//     // For each column in dst, find matching column in src (by ComponentId).
+//     // Copy present components; init or skip others.
+//     // Push entity_id into dst.entity_ids, swap-remove from src.
+//     // Return dst row for location update.
+// }
