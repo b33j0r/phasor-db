@@ -5,6 +5,7 @@ const ComponentArray = root.ComponentArray;
 const Entity = root.Entity;
 const componentId = root.componentId;
 
+allocator: std.mem.Allocator,
 id: Archetype.Id,
 name: []const ComponentId,
 columns: []ComponentArray,
@@ -14,11 +15,13 @@ pub const Archetype = @This();
 pub const Id = u64;
 
 pub fn init(
+    allocator: std.mem.Allocator,
     id: Id,
     name: []const ComponentId,
     columns: []ComponentArray,
 ) Archetype {
     return Archetype{
+        .allocator = allocator,
         .id = id,
         .name = name,
         .columns = columns,
@@ -26,18 +29,18 @@ pub fn init(
     };
 }
 
-pub fn deinit(self: *Archetype, allocator: std.mem.Allocator) void {
+pub fn deinit(self: *Archetype) void {
     // Free the component columns
     for (self.columns) |*column| {
         column.deinit();
     }
 
     // Free the arrays
-    allocator.free(self.name);
-    allocator.free(self.columns);
+    self.allocator.free(self.name);
+    self.allocator.free(self.columns);
 
     // Free entity_ids if it has allocated memory
-    self.entity_ids.deinit(allocator);
+    self.entity_ids.deinit(self.allocator);
 }
 
 pub fn getColumn(
@@ -52,85 +55,88 @@ pub fn getColumn(
     return null;
 }
 
-pub fn calculateId(
-    comptime components: anytype,
-) Id {
+pub fn getColumnIndexById(
+    self: *const Archetype,
+    component_id: ComponentId,
+) ?usize {
+    for (self.columns, 0..) |column, index| {
+        if (column.id == component_id) {
+            return index;
+        }
+    }
+    return null;
+}
+
+pub fn getColumnIndexByType(
+    self: *const Archetype,
+    comptime T: type,
+) ?usize {
+    const target_id = componentId(T);
+    return self.getColumnIndexById(target_id);
+}
+
+fn getSortedComponentIds(comptime components: anytype) [std.meta.fields(@TypeOf(components)).len]ComponentId {
+    const fields = std.meta.fields(@TypeOf(components));
+
+    comptime var component_ids: [fields.len]ComponentId = undefined;
+    comptime {
+        for (fields, 0..) |field, i| {
+            const component_value = @field(components, field.name);
+            const ComponentType = @TypeOf(component_value);
+            component_ids[i] = componentId(ComponentType);
+        }
+        std.mem.sort(ComponentId, &component_ids, {}, struct {
+            fn lt(_: void, a: ComponentId, b: ComponentId) bool {
+                return a < b;
+            }
+        }.lt);
+    }
+
+    return component_ids;
+}
+
+pub fn calculateId(comptime components: anytype) Id {
+    const sorted_ids = comptime getSortedComponentIds(components);
+
     var hasher = std.hash.Wyhash.init(0);
-    inline for (components) |component| {
-        const component_type = if (@TypeOf(component) == type) component else @TypeOf(component);
-        hasher.update(@typeName(component_type));
+    inline for (sorted_ids) |comp_id| {
+        hasher.update(std.mem.asBytes(&comp_id));
     }
     return hasher.final();
 }
+
 pub fn fromComponents(
     allocator: std.mem.Allocator,
     comptime components: anytype,
 ) !Archetype {
-    // Get type info about the components tuple
-    const components_type_info = @typeInfo(@TypeOf(components));
+    const fields = std.meta.fields(@TypeOf(components));
+    const sorted_ids = comptime getSortedComponentIds(components);
 
-    // Ensure we have a struct (tuple)
-    if (components_type_info != .@"struct") {
-        @compileError("Expected a tuple of components");
+    // Create arrays in the same sorted order
+    var component_ids: [fields.len]ComponentId = undefined;
+    var columns: [fields.len]ComponentArray = undefined;
+
+    // Find the field for each sorted component ID and create the column
+    inline for (sorted_ids, 0..) |target_id, i| {
+        inline for (fields) |field| {
+            const component_value = @field(components, field.name);
+            const ComponentType = @TypeOf(component_value);
+            if (componentId(ComponentType) == target_id) {
+                component_ids[i] = target_id;
+                columns[i] = ComponentArray.init(
+                    allocator,
+                    target_id,
+                    @sizeOf(ComponentType),
+                    @alignOf(ComponentType),
+                );
+                break;
+            }
+        }
     }
 
-    const fields = components_type_info.@"struct".fields;
-    const num_components = fields.len;
-
-    // Create arrays to hold component IDs and columns
-    var component_ids: [num_components]ComponentId = undefined;
-    var columns: [num_components]ComponentArray = undefined;
-
-    // Process each component in the tuple
-    inline for (fields, 0..) |field, i| {
-        const component_value = @field(components, field.name);
-        const ComponentType = @TypeOf(component_value);
-
-        // Generate component ID
-        component_ids[i] = componentId(ComponentType);
-
-        // Create ComponentArray for this component type
-        columns[i] = ComponentArray.init(
-            allocator,
-            component_ids[i],
-            @sizeOf(ComponentType),
-            @alignOf(ComponentType),
-        );
-    }
-
-    // Calculate archetype ID
     const archetype_id = calculateId(components);
-
-    // Allocate memory for component IDs and columns
     const name = try allocator.dupe(ComponentId, &component_ids);
     const columns_slice = try allocator.dupe(ComponentArray, &columns);
 
-    return Archetype.init(
-        archetype_id,
-        name,
-        columns_slice,
-    );
-}
-
-pub fn addEntity(
-    self: *Archetype,
-    allocator: std.mem.Allocator,
-    entity_id: Entity.Id,
-    components: anytype,
-) !void {
-    try self.entity_ids.append(allocator, entity_id);
-
-    const components_type_info = @typeInfo(@TypeOf(components));
-    if (components_type_info != .@"struct") {
-        @compileError("Expected a struct/tuple of components");
-    }
-
-    const fields = components_type_info.@"struct".fields;
-    std.debug.assert(fields.len == self.columns.len);
-
-    // Add each component to its corresponding column
-    inline for (fields, 0..) |field, i| {
-        const component_value = @field(components, field.name);
-        try self.columns[i].append(allocator, &component_value);
-    }
+    return Archetype.init(allocator, archetype_id, name, columns_slice);
 }
