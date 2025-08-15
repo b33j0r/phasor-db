@@ -114,7 +114,10 @@ pub fn calculateIdSetUnion(self: *const Archetype, comptime components: anytype)
     // Create a buffer to hold the union of component IDs
     // Maximum size is the sum of both sets
     const max_size = self.name.len + new_sorted_ids.len;
-    var union_ids = self.allocator.alloc(ComponentId, max_size) catch |err| switch (err) {
+    var union_ids = self.allocator.alloc(
+        ComponentId,
+        max_size,
+    ) catch |err| switch (err) {
         error.OutOfMemory => @panic("Out of memory in calculateIdSetUnion"),
     };
     defer self.allocator.free(union_ids);
