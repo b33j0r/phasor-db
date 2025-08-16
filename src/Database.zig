@@ -315,6 +315,7 @@ pub fn removeComponents(
     try self.entities.put(self.allocator, entity_id, updated_entity);
 }
 
+/// Queries the database for archetypes that match the specified component types.
 pub fn query(self: *Database, spec: anytype) !Query {
     var archetype_ids: std.ArrayListUnmanaged(Archetype.Id) = .empty;
     var component_ids: std.ArrayListUnmanaged(ComponentId) = .empty;
@@ -348,3 +349,33 @@ pub fn query(self: *Database, spec: anytype) !Query {
     };
 }
 
+test query {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    const Position = struct {
+        x: f32,
+        y: f32,
+    };
+
+    // Create some entities with different components
+    _ = try db.createEntity(.{
+        Position{ .x = 1.0, .y = 2.0 },
+    });
+    _ = try db.createEntity(.{
+        Position{ .x = 3.0, .y = 4.0 },
+    });
+
+    // Query for entities with position component
+    var q = try db.query(.{ Position });
+    defer q.deinit();
+
+    try std.testing.expectEqual(2, q.count());
+
+    // Iterate through the results
+    var it = q.iterator();
+    while (it.next()) |entity| {
+        std.log.debug("Found entity: {}\n", .{entity.id});
+    }
+}
