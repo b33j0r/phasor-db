@@ -170,6 +170,8 @@ pub fn fromComponentSet(
     return Archetype.init(allocator, archetype_id, component_ids, columns);
 }
 
+/// Adds an entity to the archetype with the provided components.
+/// Returns the index of the entity in the archetype's entity list.
 pub fn addEntity(
     self: *Archetype,
     entity_id: Entity.Id,
