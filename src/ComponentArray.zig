@@ -17,7 +17,6 @@ pub const min_occupied_capacity = 8;
 
 const ComponentArray = @This();
 
-/// This reduces the frequency of reallocations for small arrays.pub const min_occupied_capacity = 8;
 /// Internal buffer structure that manages aligned memory allocation
 const AlignedBuffer = struct {
     /// Pointer to the original allocation (for freeing)
@@ -150,18 +149,13 @@ pub fn ensureCapacity(self: *ComponentArray, new_capacity: usize) !void {
 }
 
 pub fn ensureTotalCapacity(self: *ComponentArray, new_capacity: usize) !void {
-    var better_capacity = self.capacity;
-    if (better_capacity >= new_capacity) return;
+    if (self.capacity >= new_capacity) return;
 
-    // Ensure we start with at least min_occupied_capacity
-    if (better_capacity == 0) {
-        better_capacity = min_occupied_capacity;
-    }
+    const better_capacity = @max(
+        self.capacity * 3 / 2,
+        @max(new_capacity, min_occupied_capacity)
+    );
 
-    // Grow capacity until it meets or exceeds new_capacity
-    while (better_capacity < new_capacity) {
-        better_capacity = better_capacity * 3 / 2 + min_occupied_capacity;
-    }
     return self.ensureCapacity(better_capacity);
 }
 
