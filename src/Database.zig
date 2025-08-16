@@ -6,7 +6,7 @@ const ComponentSet = root.ComponentSet;
 const ComponentMeta = root.ComponentMeta;
 const ComponentId = root.ComponentId;
 const componentId = root.componentId;
-const QueryResult = root.QueryResult;
+const Query = root.Query;
 
 allocator: std.mem.Allocator,
 archetypes: std.AutoArrayHashMapUnmanaged(Archetype.Id, Archetype) = .empty,
@@ -315,7 +315,7 @@ pub fn removeComponents(
     try self.entities.put(self.allocator, entity_id, updated_entity);
 }
 
-pub fn query(self: *Database, spec: anytype) !QueryResult {
+pub fn query(self: *Database, spec: anytype) !Query {
     var archetype_ids: std.ArrayListUnmanaged(Archetype.Id) = .empty;
     var component_ids: std.ArrayListUnmanaged(ComponentId) = .empty;
     defer component_ids.deinit(self.allocator);
@@ -341,7 +341,7 @@ pub fn query(self: *Database, spec: anytype) !QueryResult {
         }
     }
 
-    return QueryResult{
+    return Query{
         .allocator = self.allocator,
         .database = self,
         .archetype_ids = archetype_ids,

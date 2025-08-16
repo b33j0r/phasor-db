@@ -4,11 +4,11 @@ The `phasor-db` library is an Entity-Component-System database. For a more compl
 
 ## Architecture
 
-- [x] `ComponentArray` is a type-erased array of components.
-- [X] `Archetype` is a table of entity data, consisting of a `ComponentArray` for each column type.
-- [X] `Database` is a collection of `Archetype`s.
-- [X] `Entity` is a view into a row in an `Archetype`, providing access to its components.
-- [X] `query` allows for efficient retrieval of entities with specific components.
+- `ComponentArray` is a type-erased array of components.
+- `Archetype` is a table of entity data, consisting of a `ComponentArray` for each column type.
+- `Database` is a collection of `Archetype`s.
+- `Entity` is a view into a row in an `Archetype`, providing access to its components.
+- `Query` allows for efficient retrieval of entities with specific components.
 
 ## Usage
 

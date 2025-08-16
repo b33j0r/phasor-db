@@ -4,41 +4,41 @@ const Database = root.Database;
 const Entity = root.Entity;
 const Archetype = root.Archetype;
 
-pub const QueryResult = struct {
-    allocator: std.mem.Allocator,
-    database: *Database,
-    archetype_ids: std.ArrayListUnmanaged(Archetype.Id),
+allocator: std.mem.Allocator,
+database: *Database,
+archetype_ids: std.ArrayListUnmanaged(Archetype.Id),
 
-    pub fn deinit(self: *QueryResult) void {
-        self.archetype_ids.deinit(self.allocator);
+const Query = @This();
+
+pub fn deinit(self: *Query) void {
+    self.archetype_ids.deinit(self.allocator);
+}
+
+pub fn count(self: *const Query) usize {
+    // add up the entity counts in all matching archetypes
+    var total_count: usize = 0;
+    for (self.archetype_ids.items) |archetype_id| {
+        const archetype = self.database.archetypes.get(archetype_id) orelse continue;
+        total_count += archetype.entity_ids.items.len;
     }
+    return total_count;
+}
 
-    pub fn count(self: *const QueryResult) usize {
-        // add up the entity counts in all matching archetypes
-        var total_count: usize = 0;
-        for (self.archetype_ids.items) |archetype_id| {
-            const archetype = self.database.archetypes.get(archetype_id) orelse continue;
-            total_count += archetype.entity_ids.items.len;
-        }
-        return total_count;
-    }
+pub fn iterator(self: *const Query) Iterator {
+    return Iterator{
+        .query = self,
+        .current_archetype_index = 0,
+        .current_entity_index = 0,
+    };
+}
 
-    pub fn iterator(self: *const QueryResult) QueryIterator {
-        return QueryIterator{
-            .query = self,
-            .current_archetype_index = 0,
-            .current_entity_index = 0,
-        };
-    }
-};
-
-pub const QueryIterator = struct {
-    query: *const QueryResult,
+pub const Iterator = struct {
+    query: *const Query,
     current_archetype_index: usize = 0,
     current_entity_index: usize = 0,
     current_archetype: ?*Archetype = null,
 
-    pub fn next(self: *QueryIterator) ?Entity {
+    pub fn next(self: *Iterator) ?Entity {
         while (self.current_archetype_index < self.query.archetype_ids.items.len) {
             // Fetch archetype pointer only when moving to a new archetype
             if (self.current_archetype == null) {
