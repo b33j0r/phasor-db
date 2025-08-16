@@ -521,3 +521,83 @@ test "Database query multiple components" {
     try testing.expect(found_entity1);
     try testing.expect(found_entity4);
 }
+
+test "Database createEntity with runtime values - basic case" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // This should fail with current implementation (comptime requirement)
+    const runtime_x: f32 = 15.5; // Not comptime-known
+    const runtime_y: f32 = 25.7;
+
+    // This line should fail to compile with current code
+    const entity_id = try db.createEntity(.{
+        Position{ .x = runtime_x, .y = runtime_y },
+    });
+
+    // If it works, verify the entity was created correctly
+    const entity = db.getEntity(entity_id).?;
+    try testing.expectEqual(@as(f32, 15.5), entity.get(Position).?.x);
+    try testing.expectEqual(@as(f32, 25.7), entity.get(Position).?.y);
+}
+
+test "Database createEntity with function call values" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Helper function to simulate runtime computation
+    const computePosition = struct {
+        fn call(seed: u32) Position {
+            return Position{
+                .x = @as(f32, @floatFromInt(seed)) * 1.5,
+                .y = @as(f32, @floatFromInt(seed)) * 2.0,
+            };
+        }
+    }.call;
+
+    // This should fail with current implementation
+    const entity_id = try db.createEntity(.{
+        computePosition(42), // Function call result - not comptime
+    });
+
+    // Verify if it works
+    const entity = db.getEntity(entity_id).?;
+    try testing.expectEqual(@as(f32, 63.0), entity.get(Position).?.x);
+    try testing.expectEqual(@as(f32, 84.0), entity.get(Position).?.y);
+}
+
+test "Database createEntity same types different values should share archetype" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    const x1: f32 = 10.0;
+    const y1: f32 = 20.0;
+    const x2: f32 = 30.0;
+    const y2: f32 = 40.0;
+
+    // Create two entities with same component types but different runtime values
+    const entity1_id = try db.createEntity(.{
+        Position{ .x = x1, .y = y1 },
+    });
+
+    const entity2_id = try db.createEntity(.{
+        Position{ .x = x2, .y = y2 },
+    });
+
+    // Both entities should exist
+    const entity1 = db.getEntity(entity1_id).?;
+    const entity2 = db.getEntity(entity2_id).?;
+
+    // They should be in the same archetype (same component types)
+    try testing.expectEqual(entity1.archetype_id, entity2.archetype_id);
+
+    // But have different component values
+    try testing.expectEqual(@as(f32, 10.0), entity1.get(Position).?.x);
+    try testing.expectEqual(@as(f32, 30.0), entity2.get(Position).?.x);
+
+    // Should only have one archetype total
+    try testing.expectEqual(@as(usize, 1), db.archetypes.count());
+}
