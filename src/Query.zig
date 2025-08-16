@@ -32,26 +32,21 @@ pub fn iterator(self: *const Query) Iterator {
     };
 }
 
+/// `Iterator` is used to iterate over entities that match the query.
 pub const Iterator = struct {
     query: *const Query,
     current_archetype_index: usize = 0,
     current_entity_index: usize = 0,
     current_archetype: ?*Archetype = null,
 
+    /// Returns the next entity that matches the query.
+    /// If there are no more entities, returns null.
     pub fn next(self: *Iterator) ?Entity {
         while (self.current_archetype_index < self.query.archetype_ids.items.len) {
             // Fetch archetype pointer only when moving to a new archetype
             if (self.current_archetype == null) {
                 const archetype_id = self.query.archetype_ids.items[self.current_archetype_index];
                 self.current_archetype = self.query.database.archetypes.getPtr(archetype_id);
-                std.debug.assert(self.current_archetype != null);
-
-                // // If the archetype is not found, skip to the next one
-                // if (self.current_archetype == null) {
-                //     self.current_archetype_index += 1;
-                //     self.current_entity_index = 0;
-                //     continue;
-                // }
             }
 
             std.debug.assert(self.current_archetype != null);
@@ -60,7 +55,6 @@ pub const Iterator = struct {
             if (self.current_entity_index < archetype.entity_ids.items.len) {
                 const entity_id = archetype.entity_ids.items[self.current_entity_index];
 
-                // Build Entity view directly - no hashmap lookup needed!
                 const entity = Entity{
                     .id = entity_id,
                     .database = self.query.database,
@@ -74,7 +68,7 @@ pub const Iterator = struct {
                 // Move to next archetype
                 self.current_archetype_index += 1;
                 self.current_entity_index = 0;
-                self.current_archetype = null; // Reset cache for next archetype
+                self.current_archetype = null;
             }
         }
         return null;

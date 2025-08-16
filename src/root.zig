@@ -1,6 +1,4 @@
 //! A simple ECS (Entity-Component-System) implementation in Zig.
-//!
-//!
 const std = @import("std");
 
 pub const Archetype = @import("Archetype.zig");
@@ -42,6 +40,7 @@ pub const ComponentMeta = struct {
     }
 
     pub fn from(comptime T: anytype) ComponentMeta {
+        // This can be used with a type or a value.
         const ComponentT = if (@TypeOf(T) == type) T else @TypeOf(T);
         return ComponentMeta.init(
             componentId(ComponentT),
