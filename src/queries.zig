@@ -36,34 +36,47 @@ pub const QueryIterator = struct {
     query: *const QueryResult,
     current_archetype_index: usize = 0,
     current_entity_index: usize = 0,
+    current_archetype: ?*Archetype = null,
 
     pub fn next(self: *QueryIterator) ?Entity {
         while (self.current_archetype_index < self.query.archetype_ids.items.len) {
-            const archetype_id = self.query.archetype_ids.items[self.current_archetype_index];
-            const archetype = self.query.database.archetypes.get(archetype_id) orelse {
-                self.current_archetype_index += 1;
-                self.current_entity_index = 0;
-                continue;
-            };
+            // Fetch archetype pointer only when moving to a new archetype
+            if (self.current_archetype == null) {
+                const archetype_id = self.query.archetype_ids.items[self.current_archetype_index];
+                self.current_archetype = self.query.database.archetypes.getPtr(archetype_id);
+                std.debug.assert(self.current_archetype != null);
+
+                // // If the archetype is not found, skip to the next one
+                // if (self.current_archetype == null) {
+                //     self.current_archetype_index += 1;
+                //     self.current_entity_index = 0;
+                //     continue;
+                // }
+            }
+
+            std.debug.assert(self.current_archetype != null);
+            const archetype = self.current_archetype.?;
 
             if (self.current_entity_index < archetype.entity_ids.items.len) {
                 const entity_id = archetype.entity_ids.items[self.current_entity_index];
 
-                // Build Entity view directly from iterator state - no hashmap lookup needed!
+                // Build Entity view directly - no hashmap lookup needed!
                 const entity = Entity{
                     .id = entity_id,
                     .database = self.query.database,
-                    .archetype_id = archetype_id,
+                    .archetype_id = self.query.archetype_ids.items[self.current_archetype_index],
                     .row_index = self.current_entity_index,
                 };
 
                 self.current_entity_index += 1;
                 return entity;
             } else {
+                // Move to next archetype
                 self.current_archetype_index += 1;
                 self.current_entity_index = 0;
+                self.current_archetype = null; // Reset cache for next archetype
             }
         }
-        return null; // No more entities
+        return null;
     }
 };
