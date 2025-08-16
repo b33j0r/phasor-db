@@ -54,7 +54,7 @@ test "Database addComponents - add to existing entity" {
     try testing.expectEqual(TestHealth.full.current, entity.get(Health).?.current);
 }
 
-test "Database addComponents - add existing component (no-op)" {
+test "Database addComponents - update existing component" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();
@@ -63,15 +63,44 @@ test "Database addComponents - add existing component (no-op)" {
     const entity_id = try db.createEntity(TestEntity.basic_positioned);
     const original_archetype_count = db.archetypes.count();
 
-    // Try to add Position again - should be a no-op
+    // Add Position again with different values - should update the existing component
     try db.addComponents(entity_id, .{ .position = TestPositions.alternative });
 
     // Should still have the same number of archetypes
     try testing.expectEqual(original_archetype_count, db.archetypes.count());
 
-    // Entity should still have original position (no-op)
+    // Entity should now have the updated position values
     const entity = db.getEntity(entity_id).?;
-    try testing.expectEqual(TestPositions.basic.x, entity.get(Position).?.x);
+    try testing.expectEqual(TestPositions.alternative.x, entity.get(Position).?.x);
+    try testing.expectEqual(TestPositions.alternative.y, entity.get(Position).?.y);
+}
+
+test "Database addComponents - mixed update existing and add new" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create an entity with Position only
+    const entity_id = try db.createEntity(TestEntity.basic_positioned);
+
+    // Add Position with different values AND Velocity (mixed case)
+    try db.addComponents(entity_id, .{
+        .position = TestPositions.alternative,  // Should UPDATE existing Position
+        .velocity = TestVelocity.moving_right,  // Should ADD new Velocity
+    });
+
+    // Entity should now be in a different archetype with both components
+    const entity = db.getEntity(entity_id).?;
+    const archetype = db.archetypes.get(entity.archetype_id).?;
+    try testing.expectEqual(@as(usize, 2), archetype.columns.len);
+
+    // Verify Position was updated
+    try testing.expectEqual(TestPositions.alternative.x, entity.get(Position).?.x);
+    try testing.expectEqual(TestPositions.alternative.y, entity.get(Position).?.y);
+
+    // Verify Velocity was added
+    try testing.expectEqual(TestVelocity.moving_right.dx, entity.get(Velocity).?.dx);
+    try testing.expectEqual(TestVelocity.moving_right.dy, entity.get(Velocity).?.dy);
 }
 
 test "Database removeEntity" {

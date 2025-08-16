@@ -162,9 +162,24 @@ pub fn addComponents(
     // Calculate new archetype ID
     const new_archetype_id = union_set.calculateId();
 
-    // TODO: this is incorrect, we want to replace the component values here
+    // Handle the case where the archetype doesn't change (updating existing components only)
     if (new_archetype_id == src_archetype_id) {
-        return; // Entity already has these components
+        // Update component values in-place in the same archetype
+        const fields = std.meta.fields(@TypeOf(components));
+        inline for (fields) |field| {
+            const component_value = @field(components, field.name);
+            const ComponentType = @TypeOf(component_value);
+            const comp_id = root.componentId(ComponentType);
+
+            // Find the column for this component in the current archetype
+            for (src_archetype.columns) |*column| {
+                if (column.meta.id == comp_id) {
+                    try column.set(entity.row_index, component_value);
+                    break;
+                }
+            }
+        }
+        return; // Done updating components in-place
     }
 
     // Get or create the new archetype
@@ -196,30 +211,33 @@ pub fn addComponents(
         }
     }
 
-    // Add new component data to new archetype
+    // Add/update component data in the new archetype
     const fields = std.meta.fields(@TypeOf(components));
     inline for (fields) |field| {
         const component_value = @field(components, field.name);
         const ComponentType = @TypeOf(component_value);
         const comp_id = root.componentId(ComponentType);
 
-        // Check if this component is actually new (not already in the source archetype)
-        var is_new_component = true;
+        // Check if this component already exists in the source archetype
+        var component_exists_in_source = false;
         for (src_archetype_fresh.columns) |src_column| {
             if (src_column.meta.id == comp_id) {
-                is_new_component = false;
+                component_exists_in_source = true;
                 break;
             }
         }
 
-        // Only append if it's a truly new component
-        if (is_new_component) {
-            // Find the column for this component in the new archetype
-            for (new_archetype.?.columns) |*column| {
-                if (column.meta.id == comp_id) {
+        // Find the column for this component in the new archetype
+        for (new_archetype.?.columns) |*column| {
+            if (column.meta.id == comp_id) {
+                if (component_exists_in_source) {
+                    // Component already exists, update it at the entity's index
+                    try column.set(new_entity_index, component_value);
+                } else {
+                    // New component, append it
                     try column.append(component_value);
-                    break;
                 }
+                break;
             }
         }
     }
