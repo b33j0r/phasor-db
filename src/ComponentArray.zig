@@ -6,51 +6,57 @@ const root = @import("root.zig");
 const ComponentMeta = root.ComponentMeta;
 const ComponentId = root.ComponentId;
 
-const ComponentArray = @This();
-
 allocator: std.mem.Allocator,
 meta: ComponentMeta,
 capacity: usize = 0,
 len: usize = 0,
-buffer: Buffer = .{},
+buffer: AlignedBuffer = .{},
 
 /// Minimum capacity allocated when the array becomes occupied.
 pub const min_occupied_capacity = 8;
 
-/// Internal buffer that requests aligned memory directly from the allocator.
-const Buffer = struct {
-    ptr: ?[*]u8 = null,
-    len: usize = 0,
-    alignment: u29 = 1, // byte units
+const ComponentArray = @This();
 
-    fn isEmpty(self: *const Buffer) bool {
-        return self.ptr == null or self.len == 0;
-    }
+/// Internal buffer structure that manages aligned memory allocation
+const AlignedBuffer = struct {
+    /// Pointer to the original allocation (for freeing)
+    raw_ptr: ?[*]u8 = null,
+    /// Length of the original allocation
+    raw_len: usize = 0,
+    /// Aligned data slice for component storage
+    data: []u8 = &[_]u8{},
 
-    fn asSlice(self: *const Buffer) []u8 {
-        if (self.ptr) |p| return p[0..self.len];
-        return &[_]u8{};
-    }
-
-    fn alloc(self: *Buffer, allocator: std.mem.Allocator, n: usize, alignment: u29) !void {
-        if (n == 0) {
-            self.* = .{};
-            return;
-        }
-        const a: std.mem.Alignment = std.mem.Alignment.fromByteUnits(@intCast(alignment));
-        const p = allocator.rawAlloc(n, a, @returnAddress()) orelse return error.OutOfMemory;
-        self.ptr = p;
-        self.len = n;
-        self.alignment = alignment;
-    }
-
-    fn free(self: *Buffer, allocator: std.mem.Allocator) void {
-        if (self.ptr) |p| {
-            const a: std.mem.Alignment = std.mem.Alignment.fromByteUnits(@intCast(self.alignment));
-            // rawFree expects a slice in 0.15
-            allocator.rawFree(p[0..self.len], a, @returnAddress());
+    fn deinit(self: *AlignedBuffer, allocator: std.mem.Allocator) void {
+        if (self.raw_ptr) |ptr| {
+            allocator.free(ptr[0..self.raw_len]);
         }
         self.* = .{};
+    }
+
+    fn isEmpty(self: *const AlignedBuffer) bool {
+        return self.raw_ptr == null and self.data.len == 0;
+    }
+
+    fn allocateAligned(
+        self: *AlignedBuffer,
+        allocator: std.mem.Allocator,
+        byte_count: usize,
+        alignment: usize,
+    ) !void {
+        if (byte_count == 0) {
+            return;
+        }
+
+        const extra = if (alignment > 1) alignment - 1 else 0;
+        const raw_allocation = try allocator.alloc(u8, byte_count + extra);
+
+        const raw_addr = @intFromPtr(raw_allocation.ptr);
+        const aligned_addr = std.mem.alignForward(usize, raw_addr, alignment);
+        const offset = aligned_addr - raw_addr;
+
+        self.raw_ptr = raw_allocation.ptr;
+        self.raw_len = raw_allocation.len;
+        self.data = raw_allocation[offset .. offset + byte_count];
     }
 };
 
@@ -74,39 +80,34 @@ pub fn initFromType(
     return ComponentArray.init(allocator, meta);
 }
 
-/// Construct from either a type *or* a value.
-/// If given a value, the array is created and the value is appended.
 pub fn from(
     allocator: std.mem.Allocator,
     comptime T: anytype,
 ) !ComponentArray {
-    const is_value = @TypeOf(T) != type;
-    const ComponentT = if (is_value) @TypeOf(T) else T;
-
+    const hasValue = @TypeOf(T) != type;
+    const ComponentT = if (hasValue) @TypeOf(T) else T;
     const meta = ComponentMeta.from(ComponentT);
     var component_array = ComponentArray.init(allocator, meta);
-    if (is_value) {
+    if (hasValue) {
         try component_array.append(T);
     }
     return component_array;
 }
 
 pub fn deinit(self: *ComponentArray) void {
-    self.buffer.free(self.allocator);
+    self.buffer.deinit(self.allocator);
     self.* = undefined;
 }
 
 pub fn get(self: *const ComponentArray, index: usize, comptime T: type) ?*T {
     if (self.meta.size == 0 or index >= self.len) return null;
-
-    // Invariant: base allocation is meta.alignment-aligned and stride respects alignment.
     const offset = index * self.meta.stride;
-    const base = self.buffer.asSlice();
-    const ptr = base.ptr + offset;
-
-    // Keep in debug/safe; omit in ReleaseFast if you like.
-    std.debug.assert(@intFromPtr(ptr) % @alignOf(T) == 0);
-
+    // Ensure the pointer is properly aligned for type T
+    const ptr = self.buffer.data.ptr + offset;
+    if (@intFromPtr(ptr) % @alignOf(T) != 0) {
+        // Memory is not aligned correctly - this should not happen with proper stride calculation
+        return null;
+    }
     return @as(*T, @ptrCast(@alignCast(ptr)));
 }
 
@@ -114,36 +115,35 @@ pub fn set(self: *ComponentArray, index: usize, value: anytype) !void {
     const T = @TypeOf(value);
     if (self.meta.size == 0 or index >= self.len) return error.IndexOutOfBounds;
     if (@sizeOf(T) != self.meta.size) return error.TypeMismatch;
-
     const offset = index * self.meta.stride;
-    const base = self.buffer.asSlice();
-    @memcpy(base[offset .. offset + self.meta.size], std.mem.asBytes(&value));
+    @memcpy(self.buffer.data[offset .. offset + self.meta.size], std.mem.asBytes(&value));
 }
 
 pub fn ensureCapacity(self: *ComponentArray, new_capacity: usize) !void {
     if (new_capacity <= self.capacity) return;
 
-    // ZSTs need no backing storage but still track capacity for len bounds.
+    // If zero-sized component, no backing storage is required
     if (self.meta.stride == 0) {
         self.capacity = new_capacity;
         return;
     }
 
     const len_bytes: usize = new_capacity * self.meta.stride;
+    const alignment: usize = @intCast(self.meta.alignment);
 
-    var new_buffer: Buffer = .{};
-    try new_buffer.alloc(self.allocator, len_bytes, self.meta.alignment);
+    // Create new aligned buffer
+    var new_buffer: AlignedBuffer = .{};
+    try new_buffer.allocateAligned(self.allocator, len_bytes, alignment);
 
-    // Copy existing data.
+    // Copy existing data
     const copy_len = self.len * self.meta.stride;
     if (copy_len > 0) {
-        const dst = new_buffer.asSlice();
-        const src = self.buffer.asSlice();
-        @memcpy(dst[0..copy_len], src[0..copy_len]);
+        @memcpy(new_buffer.data[0..copy_len], self.buffer.data[0..copy_len]);
     }
 
-    // Free previous allocation and install new.
-    self.buffer.free(self.allocator);
+    // Free previous allocation
+    self.buffer.deinit(self.allocator);
+
     self.buffer = new_buffer;
     self.capacity = new_capacity;
 }
@@ -153,105 +153,69 @@ pub fn ensureTotalCapacity(self: *ComponentArray, new_capacity: usize) !void {
 
     const better_capacity = @max(
         self.capacity * 3 / 2,
-        @max(new_capacity, min_occupied_capacity),
+        @max(new_capacity, min_occupied_capacity)
     );
 
     return self.ensureCapacity(better_capacity);
 }
 
 pub fn append(self: *ComponentArray, value: anytype) !void {
-    // ZST fast-path: just bump len and maybe capacity bookkeeping.
-    if (self.meta.stride == 0) {
-        try self.ensureTotalCapacity(self.len + 1);
-        self.len += 1;
-        return;
-    }
-
     try self.ensureTotalCapacity(self.len + 1);
-
     const T = @TypeOf(value);
     if (@sizeOf(T) != self.meta.size) return error.TypeMismatch;
-
     const offset = self.len * self.meta.stride;
-    const base = self.buffer.asSlice();
-    @memcpy(base[offset .. offset + self.meta.size], std.mem.asBytes(&value));
-
+    @memcpy(self.buffer.data[offset .. offset + self.meta.size], std.mem.asBytes(&value));
     self.len += 1;
 }
 
 pub fn insert(self: *ComponentArray, index: usize, value: anytype) !void {
     if (index > self.len) return error.IndexOutOfBounds;
 
-    // ZST fast-path: no bytes, only indices move logically.
-    if (self.meta.stride == 0) {
-        try self.ensureTotalCapacity(self.len + 1);
-        // For ZSTs, "shifting" is a no-op on storage; we just increment len.
-        self.len += 1;
-        return;
-    }
-
     try self.ensureTotalCapacity(self.len + 1);
-
     const T = @TypeOf(value);
     if (@sizeOf(T) != self.meta.size) return error.TypeMismatch;
 
-    // Shift elements to the right. Because dst > src (overlapping), use copyBackwards.
+    // Shift elements to the right
     if (index < self.len) {
         const src_offset = index * self.meta.stride;
         const dst_offset = (index + 1) * self.meta.stride;
         const bytes_to_move = (self.len - index) * self.meta.stride;
-
-        const base = self.buffer.asSlice();
-        std.mem.copyBackwards(
-            u8,
-            base[dst_offset .. dst_offset + bytes_to_move],
-            base[src_offset .. src_offset + bytes_to_move],
-        );
+        std.mem.copyBackwards(u8, self.buffer.data[dst_offset .. dst_offset + bytes_to_move], self.buffer.data[src_offset .. src_offset + bytes_to_move]);
     }
 
-    // Insert the new element.
+    // Insert the new element
     const offset = index * self.meta.stride;
-    const base = self.buffer.asSlice();
-    @memcpy(base[offset .. offset + self.meta.size], std.mem.asBytes(&value));
-
+    @memcpy(self.buffer.data[offset .. offset + self.meta.size], std.mem.asBytes(&value));
     self.len += 1;
 }
 
-/// `shiftRemove` should be used when order matters (e.g., rendering order).
-/// Shifts elements left. Since dst < src here, `copyForwards` is correct for the overlap.
+/// `shiftRemove` should be used when order matters. This is not the typical
+/// case in ECS, but it can be useful for certain operations where the order
+/// of components is significant (e.g., rendering order).
 pub fn shiftRemove(self: *ComponentArray, index: usize) void {
     if (index >= self.len) return;
 
-    if (self.meta.stride != 0 and index < self.len - 1) {
+    // Shift elements to the left - use copyBackwards for overlapping memory
+    if (index < self.len - 1) {
         const dst_offset = index * self.meta.stride;
         const src_offset = (index + 1) * self.meta.stride;
         const bytes_to_move = (self.len - index - 1) * self.meta.stride;
-
-        const base = self.buffer.asSlice();
-        std.mem.copyForwards(
-            u8,
-            base[dst_offset .. dst_offset + bytes_to_move],
-            base[src_offset .. src_offset + bytes_to_move],
-        );
+        std.mem.copyForwards(u8, self.buffer.data[dst_offset .. dst_offset + bytes_to_move], self.buffer.data[src_offset .. src_offset + bytes_to_move]);
     }
 
     self.len -= 1;
 }
 
-/// `swapRemove` is more efficient when order does not matter.
-/// Replaces the removed element with the last element.
+/// `swapRemove` is more efficient for most ECS operations, as it does not
+/// preserve the order of components. It simply replaces the element at `index`
+/// with the last element and reduces the length.
 pub fn swapRemove(self: *ComponentArray, index: usize) void {
     if (index >= self.len) return;
 
-    if (self.meta.stride != 0 and index != self.len - 1) {
+    if (index != self.len - 1) {
         const dst_offset = index * self.meta.stride;
         const src_offset = (self.len - 1) * self.meta.stride;
-
-        const base = self.buffer.asSlice();
-        @memcpy(
-            base[dst_offset .. dst_offset + self.meta.stride],
-            base[src_offset .. src_offset + self.meta.stride],
-        );
+        @memcpy(self.buffer.data[dst_offset .. dst_offset + self.meta.stride], self.buffer.data[src_offset .. src_offset + self.meta.stride]);
     }
 
     self.len -= 1;
@@ -265,37 +229,34 @@ pub fn shrinkAndFree(self: *ComponentArray, new_capacity: usize) !void {
     if (new_capacity >= self.capacity) return;
 
     const actual_capacity = @max(new_capacity, self.len);
-
     if (self.meta.stride == 0) {
         self.capacity = actual_capacity;
-        if (actual_capacity == 0) {
-            self.buffer.free(self.allocator);
-            self.buffer = .{};
-        }
         return;
     }
 
     if (actual_capacity == 0) {
-        self.buffer.free(self.allocator);
+        self.buffer.deinit(self.allocator);
         self.buffer = .{};
         self.capacity = 0;
         return;
     }
 
     const len_bytes: usize = actual_capacity * self.meta.stride;
+    const alignment: usize = @intCast(self.meta.alignment);
 
-    var new_buffer: Buffer = .{};
-    try new_buffer.alloc(self.allocator, len_bytes, self.meta.alignment);
+    // Create new aligned buffer
+    var new_buffer: AlignedBuffer = .{};
+    try new_buffer.allocateAligned(self.allocator, len_bytes, alignment);
 
-    // Copy existing data up to current len.
+    // Copy existing data
     const copy_len = self.len * self.meta.stride;
     if (copy_len > 0) {
-        const dst = new_buffer.asSlice();
-        const src = self.buffer.asSlice();
-        @memcpy(dst[0..copy_len], src[0..copy_len]);
+        @memcpy(new_buffer.data[0..copy_len], self.buffer.data[0..copy_len]);
     }
 
-    self.buffer.free(self.allocator);
+    // Free previous allocation
+    self.buffer.deinit(self.allocator);
+
     self.buffer = new_buffer;
     self.capacity = actual_capacity;
 }

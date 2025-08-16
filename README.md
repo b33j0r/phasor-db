@@ -14,7 +14,7 @@ The `phasor-ecs` library is an Entity-Component-System database. For a more comp
 
 ```zig
 const std = @import("std");
-const ecs = @import("phasor-ecs");
+const ecs = @import("phasor-db");
 
 const Position = struct {
     x: f32,
