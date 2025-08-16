@@ -188,12 +188,12 @@ pub fn addComponents(
             if (dest_column.meta.id == src_column.meta.id) {
                 // Copy raw bytes from source to destination
                 const src_offset = src_row_index * src_column.meta.stride;
-                const src_data = src_column.buffer.data[src_offset .. src_offset + src_column.meta.size];
+                const src_data = src_column.data[src_offset .. src_offset + src_column.meta.size];
 
                 // Ensure destination has capacity
                 try dest_column.ensureTotalCapacity(dest_column.len + 1);
                 const dst_offset = dest_column.len * dest_column.meta.stride;
-                @memcpy(dest_column.buffer.data[dst_offset .. dst_offset + dest_column.meta.size], src_data);
+                @memcpy(dest_column.data[dst_offset .. dst_offset + dest_column.meta.size], src_data);
                 dest_column.len += 1;
                 break;
             }
@@ -326,12 +326,12 @@ pub fn removeComponents(
                 if (dest_column.meta.id == src_column.meta.id) {
                     // Copy raw bytes from source to destination
                     const src_offset = src_row_index * src_column.meta.stride;
-                    const src_data = src_column.buffer.data[src_offset .. src_offset + src_column.meta.size];
+                    const src_data = src_column.data[src_offset .. src_offset + src_column.meta.size];
 
                     // Ensure destination has capacity
                     try dest_column.ensureTotalCapacity(dest_column.len + 1);
                     const dst_offset = dest_column.len * dest_column.meta.stride;
-                    @memcpy(dest_column.buffer.data[dst_offset .. dst_offset + dest_column.meta.size], src_data);
+                    @memcpy(dest_column.data[dst_offset .. dst_offset + dest_column.meta.size], src_data);
                     dest_column.len += 1;
                     break;
                 }

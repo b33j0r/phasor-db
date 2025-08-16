@@ -10,55 +10,13 @@ allocator: std.mem.Allocator,
 meta: ComponentMeta,
 capacity: usize = 0,
 len: usize = 0,
-buffer: AlignedBuffer = .{},
+data: []u8 = &[_]u8{},
 
 /// Minimum capacity allocated when the array becomes occupied.
 pub const min_occupied_capacity = 8;
 
 const ComponentArray = @This();
 
-/// Internal buffer structure that manages aligned memory allocation
-const AlignedBuffer = struct {
-    /// Pointer to the original allocation (for freeing)
-    raw_ptr: ?[*]u8 = null,
-    /// Length of the original allocation
-    raw_len: usize = 0,
-    /// Aligned data slice for component storage
-    data: []u8 = &[_]u8{},
-
-    fn deinit(self: *AlignedBuffer, allocator: std.mem.Allocator) void {
-        if (self.raw_ptr) |ptr| {
-            allocator.free(ptr[0..self.raw_len]);
-        }
-        self.* = .{};
-    }
-
-    fn isEmpty(self: *const AlignedBuffer) bool {
-        return self.raw_ptr == null and self.data.len == 0;
-    }
-
-    fn allocateAligned(
-        self: *AlignedBuffer,
-        allocator: std.mem.Allocator,
-        byte_count: usize,
-        alignment: usize,
-    ) !void {
-        if (byte_count == 0) {
-            return;
-        }
-
-        const extra = if (alignment > 1) alignment - 1 else 0;
-        const raw_allocation = try allocator.alloc(u8, byte_count + extra);
-
-        const raw_addr = @intFromPtr(raw_allocation.ptr);
-        const aligned_addr = std.mem.alignForward(usize, raw_addr, alignment);
-        const offset = aligned_addr - raw_addr;
-
-        self.raw_ptr = raw_allocation.ptr;
-        self.raw_len = raw_allocation.len;
-        self.data = raw_allocation[offset .. offset + byte_count];
-    }
-};
 
 pub fn init(
     allocator: std.mem.Allocator,
@@ -95,7 +53,10 @@ pub fn from(
 }
 
 pub fn deinit(self: *ComponentArray) void {
-    self.buffer.deinit(self.allocator);
+    if (self.data.len > 0) {
+        const alignment = std.mem.Alignment.fromByteUnits(self.meta.alignment);
+        self.allocator.rawFree(self.data, alignment, @returnAddress());
+    }
     self.* = undefined;
 }
 
@@ -103,7 +64,7 @@ pub fn get(self: *const ComponentArray, index: usize, comptime T: type) ?*T {
     if (self.meta.size == 0 or index >= self.len) return null;
     const offset = index * self.meta.stride;
     // Ensure the pointer is properly aligned for type T
-    const ptr = self.buffer.data.ptr + offset;
+    const ptr = self.data.ptr + offset;
     if (@intFromPtr(ptr) % @alignOf(T) != 0) {
         // Memory is not aligned correctly - this should not happen with proper stride calculation
         return null;
@@ -116,7 +77,7 @@ pub fn set(self: *ComponentArray, index: usize, value: anytype) !void {
     if (self.meta.size == 0 or index >= self.len) return error.IndexOutOfBounds;
     if (@sizeOf(T) != self.meta.size) return error.TypeMismatch;
     const offset = index * self.meta.stride;
-    @memcpy(self.buffer.data[offset .. offset + self.meta.size], std.mem.asBytes(&value));
+    @memcpy(self.data[offset .. offset + self.meta.size], std.mem.asBytes(&value));
 }
 
 pub fn ensureCapacity(self: *ComponentArray, new_capacity: usize) !void {
@@ -129,22 +90,25 @@ pub fn ensureCapacity(self: *ComponentArray, new_capacity: usize) !void {
     }
 
     const len_bytes: usize = new_capacity * self.meta.stride;
-    const alignment: usize = @intCast(self.meta.alignment);
+    const alignment = std.mem.Alignment.fromByteUnits(self.meta.alignment);
 
-    // Create new aligned buffer
-    var new_buffer: AlignedBuffer = .{};
-    try new_buffer.allocateAligned(self.allocator, len_bytes, alignment);
+    // Allocate new aligned memory using standard allocator
+    const raw_ptr = self.allocator.rawAlloc(len_bytes, alignment, @returnAddress()) orelse return error.OutOfMemory;
+    const new_data = raw_ptr[0..len_bytes];
 
     // Copy existing data
     const copy_len = self.len * self.meta.stride;
     if (copy_len > 0) {
-        @memcpy(new_buffer.data[0..copy_len], self.buffer.data[0..copy_len]);
+        @memcpy(new_data[0..copy_len], self.data[0..copy_len]);
     }
 
     // Free previous allocation
-    self.buffer.deinit(self.allocator);
+    if (self.data.len > 0) {
+        const old_alignment = std.mem.Alignment.fromByteUnits(self.meta.alignment);
+        self.allocator.rawFree(self.data, old_alignment, @returnAddress());
+    }
 
-    self.buffer = new_buffer;
+    self.data = new_data;
     self.capacity = new_capacity;
 }
 
@@ -164,7 +128,7 @@ pub fn append(self: *ComponentArray, value: anytype) !void {
     const T = @TypeOf(value);
     if (@sizeOf(T) != self.meta.size) return error.TypeMismatch;
     const offset = self.len * self.meta.stride;
-    @memcpy(self.buffer.data[offset .. offset + self.meta.size], std.mem.asBytes(&value));
+    @memcpy(self.data[offset .. offset + self.meta.size], std.mem.asBytes(&value));
     self.len += 1;
 }
 
@@ -180,12 +144,12 @@ pub fn insert(self: *ComponentArray, index: usize, value: anytype) !void {
         const src_offset = index * self.meta.stride;
         const dst_offset = (index + 1) * self.meta.stride;
         const bytes_to_move = (self.len - index) * self.meta.stride;
-        std.mem.copyBackwards(u8, self.buffer.data[dst_offset .. dst_offset + bytes_to_move], self.buffer.data[src_offset .. src_offset + bytes_to_move]);
+        std.mem.copyBackwards(u8, self.data[dst_offset .. dst_offset + bytes_to_move], self.data[src_offset .. src_offset + bytes_to_move]);
     }
 
     // Insert the new element
     const offset = index * self.meta.stride;
-    @memcpy(self.buffer.data[offset .. offset + self.meta.size], std.mem.asBytes(&value));
+    @memcpy(self.data[offset .. offset + self.meta.size], std.mem.asBytes(&value));
     self.len += 1;
 }
 
@@ -200,7 +164,7 @@ pub fn shiftRemove(self: *ComponentArray, index: usize) void {
         const dst_offset = index * self.meta.stride;
         const src_offset = (index + 1) * self.meta.stride;
         const bytes_to_move = (self.len - index - 1) * self.meta.stride;
-        std.mem.copyForwards(u8, self.buffer.data[dst_offset .. dst_offset + bytes_to_move], self.buffer.data[src_offset .. src_offset + bytes_to_move]);
+        std.mem.copyForwards(u8, self.data[dst_offset .. dst_offset + bytes_to_move], self.data[src_offset .. src_offset + bytes_to_move]);
     }
 
     self.len -= 1;
@@ -215,7 +179,7 @@ pub fn swapRemove(self: *ComponentArray, index: usize) void {
     if (index != self.len - 1) {
         const dst_offset = index * self.meta.stride;
         const src_offset = (self.len - 1) * self.meta.stride;
-        @memcpy(self.buffer.data[dst_offset .. dst_offset + self.meta.stride], self.buffer.data[src_offset .. src_offset + self.meta.stride]);
+        @memcpy(self.data[dst_offset .. dst_offset + self.meta.stride], self.data[src_offset .. src_offset + self.meta.stride]);
     }
 
     self.len -= 1;
@@ -235,28 +199,34 @@ pub fn shrinkAndFree(self: *ComponentArray, new_capacity: usize) !void {
     }
 
     if (actual_capacity == 0) {
-        self.buffer.deinit(self.allocator);
-        self.buffer = .{};
+        if (self.data.len > 0) {
+            const alignment = std.mem.Alignment.fromByteUnits(self.meta.alignment);
+            self.allocator.rawFree(self.data, alignment, @returnAddress());
+        }
+        self.data = &[_]u8{};
         self.capacity = 0;
         return;
     }
 
     const len_bytes: usize = actual_capacity * self.meta.stride;
-    const alignment: usize = @intCast(self.meta.alignment);
+    const alignment = std.mem.Alignment.fromByteUnits(self.meta.alignment);
 
-    // Create new aligned buffer
-    var new_buffer: AlignedBuffer = .{};
-    try new_buffer.allocateAligned(self.allocator, len_bytes, alignment);
+    // Allocate new aligned memory using standard allocator
+    const raw_ptr = self.allocator.rawAlloc(len_bytes, alignment, @returnAddress()) orelse return error.OutOfMemory;
+    const new_data = raw_ptr[0..len_bytes];
 
     // Copy existing data
     const copy_len = self.len * self.meta.stride;
     if (copy_len > 0) {
-        @memcpy(new_buffer.data[0..copy_len], self.buffer.data[0..copy_len]);
+        @memcpy(new_data[0..copy_len], self.data[0..copy_len]);
     }
 
     // Free previous allocation
-    self.buffer.deinit(self.allocator);
+    if (self.data.len > 0) {
+        const old_alignment = std.mem.Alignment.fromByteUnits(self.meta.alignment);
+        self.allocator.rawFree(self.data, old_alignment, @returnAddress());
+    }
 
-    self.buffer = new_buffer;
+    self.data = new_data;
     self.capacity = actual_capacity;
 }
