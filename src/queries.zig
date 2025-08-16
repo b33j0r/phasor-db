@@ -48,10 +48,15 @@ pub const QueryIterator = struct {
 
             if (self.current_entity_index < archetype.entity_ids.items.len) {
                 const entity_id = archetype.entity_ids.items[self.current_entity_index];
-                const entity = self.query.database.getEntity(entity_id) orelse {
-                    self.current_entity_index += 1;
-                    continue;
+
+                // Build Entity view directly from iterator state - no hashmap lookup needed!
+                const entity = Entity{
+                    .id = entity_id,
+                    .database = self.query.database,
+                    .archetype_id = archetype_id,
+                    .row_index = self.current_entity_index,
                 };
+
                 self.current_entity_index += 1;
                 return entity;
             } else {
