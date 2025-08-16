@@ -21,7 +21,6 @@ pub fn init(allocator: std.mem.Allocator) Database {
 }
 
 pub fn deinit(self: *Database) void {
-    // Deinit all archetype values before freeing the map storage
     var it = self.archetypes.iterator();
     while (it.next()) |entry| {
         entry.value_ptr.deinit();
