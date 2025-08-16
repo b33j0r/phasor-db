@@ -6,6 +6,9 @@ const std = @import("std");
 pub const Archetype = @import("Archetype.zig");
 pub const Database = @import("Database.zig");
 pub const Entity = @import("Entity.zig");
+pub const queries = @import("queries.zig");
+pub const QueryResult = queries.QueryResult;
+pub const QueryIterator = queries.QueryIterator;
 pub const ComponentArray = @import("ComponentArray.zig");
 pub const ComponentSet = @import("ComponentSet.zig");
 

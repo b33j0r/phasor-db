@@ -441,3 +441,54 @@ test "Database query one component" {
         }
     }
 }
+
+test "Database query multiple components" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create entities with different component combinations
+    const entity1_id = try db.createEntity(.{
+        Position{ .x = 1.0, .y = 2.0 },
+        Health{ .current = 100, .max = 100 }
+    });
+    const _entity2_id = try db.createEntity(.{ Position{ .x = 3.0, .y = 4.0 } }); // Only position
+    const _entity3_id = try db.createEntity(.{ Health{ .current = 50, .max = 100 } }); // Only health
+    const entity4_id = try db.createEntity(.{ Position{ .x = 5.0, .y = 6.0 }, Health{ .current = 75, .max = 100 } });
+    
+    _ = _entity2_id; // Intentionally unused - testing that query doesn't return it
+    _ = _entity3_id; // Intentionally unused - testing that query doesn't return it
+
+    // Query for entities with both Position and Health
+    var query_result = try db.query(.{ Position, Health });
+    defer query_result.deinit();
+    
+    // Should find only entities 1 and 4
+    try testing.expectEqual(2, query_result.count());
+    
+    var iter = query_result.iterator();
+    var found_entity1 = false;
+    var found_entity4 = false;
+    
+    while (iter.next()) |entity| {
+        const pos = entity.get(Position).?;
+        const health = entity.get(Health).?;
+        
+        if (entity.id == entity1_id) {
+            found_entity1 = true;
+            try testing.expectEqual(@as(f32, 1.0), pos.x);
+            try testing.expectEqual(@as(f32, 2.0), pos.y);
+            try testing.expectEqual(@as(i32, 100), health.current);
+        } else if (entity.id == entity4_id) {
+            found_entity4 = true;
+            try testing.expectEqual(@as(f32, 5.0), pos.x);
+            try testing.expectEqual(@as(f32, 6.0), pos.y);
+            try testing.expectEqual(@as(i32, 75), health.current);
+        } else {
+            try testing.expect(false); // Should not find entity2 or entity3
+        }
+    }
+    
+    try testing.expect(found_entity1);
+    try testing.expect(found_entity4);
+}
