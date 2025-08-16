@@ -395,10 +395,7 @@ test "ComponentArray stress test with many operations" {
 
     // Add many elements
     for (0..1000) |i| {
-        try pos_array.append(Position{
-            .x = @floatFromInt(i),
-            .y = @floatFromInt(i * 2)
-        });
+        try pos_array.append(Position{ .x = @floatFromInt(i), .y = @floatFromInt(i * 2) });
     }
 
     try testing.expectEqual(@as(usize, 1000), pos_array.len);
@@ -414,10 +411,7 @@ test "ComponentArray stress test with many operations" {
 
     // Insert elements back
     for (0..250) |idx| {
-        try pos_array.insert(idx * 2, Position{
-            .x = @floatFromInt(idx + 2000),
-            .y = @floatFromInt(idx + 3000)
-        });
+        try pos_array.insert(idx * 2, Position{ .x = @floatFromInt(idx + 2000), .y = @floatFromInt(idx + 3000) });
     }
 
     try testing.expectEqual(@as(usize, 750), pos_array.len);

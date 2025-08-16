@@ -5,6 +5,6 @@ pub const test_database = @import("test_database.zig");
 const std = @import("std");
 const Self = @This();
 
-test "Import tests"{
+test "Import tests" {
     std.testing.refAllDecls(Self);
 }

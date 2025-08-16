@@ -54,11 +54,7 @@ pub const TestEntity = struct {
     pub const basic_positioned = .{ .position = TestPositions.basic };
     pub const healthy_positioned = .{ .position = TestPositions.basic, .health = TestHealth.full };
     pub const moving_entity = .{ .position = TestPositions.basic, .velocity = TestVelocity.moving_right };
-    pub const full_entity = .{ 
-        .position = TestPositions.basic, 
-        .health = TestHealth.full, 
-        .velocity = TestVelocity.moving_right 
-    };
+    pub const full_entity = .{ .position = TestPositions.basic, .health = TestHealth.full, .velocity = TestVelocity.moving_right };
 };
 
 /// Helper function for creating test arrays

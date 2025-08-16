@@ -29,7 +29,7 @@ pub fn fromComponents(allocator: std.mem.Allocator, comptime components: anytype
     try set.items.ensureTotalCapacity(allocator, fields.len);
 
     // Create ComponentMeta for each component and add to set
-        inline for (fields) |field| {
+    inline for (fields) |field| {
         const component_value = @field(components, field.name);
         const ComponentT = @TypeOf(component_value);
         const meta = ComponentMeta.from(ComponentT);
@@ -52,7 +52,7 @@ pub fn fromSlice(allocator: std.mem.Allocator, metas: []const ComponentMeta) !Co
 
 pub fn insertSorted(self: *ComponentSet, meta: ComponentMeta) !void {
     // Binary search for insertion point
-        var left: usize = 0;
+    var left: usize = 0;
     var right: usize = self.items.items.len;
 
     while (left < right) {
@@ -63,7 +63,7 @@ pub fn insertSorted(self: *ComponentSet, meta: ComponentMeta) !void {
             right = mid;
         } else {
             // Already exists, no need to insert
-                return;
+            return;
         }
     }
 
@@ -78,7 +78,7 @@ pub fn setUnion(self: *const ComponentSet, other: *const ComponentSet) !Componen
     var j: usize = 0;
 
     // Merge two sorted arrays, avoiding duplicates
-        while (i < self.items.items.len and j < other.items.items.len) {
+    while (i < self.items.items.len and j < other.items.items.len) {
         const self_meta = self.items.items[i];
         const other_meta = other.items.items[j];
 
@@ -90,14 +90,14 @@ pub fn setUnion(self: *const ComponentSet, other: *const ComponentSet) !Componen
             j += 1;
         } else {
             // Equal IDs - add only once
-                result.items.appendAssumeCapacity(self_meta);
+            result.items.appendAssumeCapacity(self_meta);
             i += 1;
             j += 1;
         }
     }
 
     // Add remaining elements
-        while (i < self.items.items.len) {
+    while (i < self.items.items.len) {
         result.items.appendAssumeCapacity(self.items.items[i]);
         i += 1;
     }
@@ -117,7 +117,7 @@ pub fn setDifference(self: *const ComponentSet, other: *const ComponentSet) !Com
     var j: usize = 0;
 
     // Elements in self but not in other
-        while (i < self.items.items.len and j < other.items.items.len) {
+    while (i < self.items.items.len and j < other.items.items.len) {
         const self_meta = self.items.items[i];
         const other_meta = other.items.items[j];
 
@@ -128,13 +128,13 @@ pub fn setDifference(self: *const ComponentSet, other: *const ComponentSet) !Com
             j += 1;
         } else {
             // Equal IDs - skip both
-                i += 1;
+            i += 1;
             j += 1;
         }
     }
 
     // Add remaining elements from self
-        while (i < self.items.items.len) {
+    while (i < self.items.items.len) {
         result.items.appendAssumeCapacity(self.items.items[i]);
         i += 1;
     }

@@ -11,7 +11,7 @@ const Velocity = struct {
     y: f32,
 };
 
-pub fn main() !void{
+pub fn main() !void {
     const allocator = std.heap.c_allocator;
     var db = ecs.Database.init(allocator);
     defer db.deinit();
@@ -25,6 +25,6 @@ pub fn main() !void{
     const position = readEntity.get(Position).?;
     const velocity = readEntity.get(Velocity).?;
 
-    std.debug.print("Entity Position: ({}, {})\n", .{position.x, position.y});
-    std.debug.print("Entity Velocity: ({}, {})\n", .{velocity.x, velocity.y});
+    std.debug.print("Entity Position: ({}, {})\n", .{ position.x, position.y });
+    std.debug.print("Entity Velocity: ({}, {})\n", .{ velocity.x, velocity.y });
 }

@@ -45,7 +45,7 @@ test "Database addComponents - add to existing entity" {
     const entity = db.getEntity(entity_id).?;
     const archetype = db.archetypes.get(entity.archetype_id).?;
     try testing.expectEqual(@as(usize, 2), archetype.columns.len);
-    
+
     // Should have two archetypes now (original empty one should be pruned)
     try testing.expectEqual(@as(usize, 1), db.archetypes.count());
 
@@ -68,7 +68,7 @@ test "Database addComponents - add existing component (no-op)" {
 
     // Should still have the same number of archetypes
     try testing.expectEqual(original_archetype_count, db.archetypes.count());
-    
+
     // Entity should still have original position (no-op)
     const entity = db.getEntity(entity_id).?;
     try testing.expectEqual(TestPositions.basic.x, entity.get(Position).?.x);
@@ -87,7 +87,7 @@ test "Database removeEntity" {
     try db.removeEntity(entity_id);
 
     // Entity should no longer exist
-    try testing.expectEqual( null, db.getEntity(entity_id) );
+    try testing.expectEqual(null, db.getEntity(entity_id));
 
     // Archetype count should be 0 after removing the only entity
     try testing.expectEqual(@as(usize, 0), db.archetypes.count());
@@ -112,7 +112,7 @@ test "Database removeEntity - multiple entities same archetype" {
     const entity1_id = try db.createEntity(TestEntity.healthy_positioned);
     const entity2_id = try db.createEntity(TestEntity.healthy_positioned);
     const entity3_id = try db.createEntity(TestEntity.healthy_positioned);
-    
+
     try testing.expectEqual(@as(usize, 1), db.archetypes.count());
 
     // Remove middle entity
@@ -147,7 +147,7 @@ test "Database removeEntity - different archetypes" {
     const basic_entity = try db.createEntity(TestEntity.basic_positioned);
     const healthy_entity = try db.createEntity(TestEntity.healthy_positioned);
     const moving_entity = try db.createEntity(TestEntity.moving_entity);
-    
+
     try testing.expectEqual(@as(usize, 3), db.archetypes.count());
 
     // Remove entity from middle archetype
@@ -164,10 +164,10 @@ test "Database removeEntity - different archetypes" {
     // Verify remaining entities still have their components
     const basic_ref = db.getEntity(basic_entity).?;
     const moving_ref = db.getEntity(moving_entity).?;
-    
+
     try testing.expectEqual(TestPositions.basic.x, basic_ref.get(Position).?.x);
     try testing.expectEqual(@as(?*Health, null), basic_ref.get(Health));
-    
+
     try testing.expectEqual(TestPositions.basic.x, moving_ref.get(Position).?.x);
     try testing.expectEqual(TestVelocity.moving_right.dx, moving_ref.get(Velocity).?.dx);
 }
@@ -180,13 +180,13 @@ test "Database removeEntity - archetype cleanup edge case" {
     // Create single entity and remove it
     const entity_id = try db.createEntity(.{ .position = Position{ .x = 10.0, .y = 20.0 } });
     try testing.expectEqual(@as(usize, 1), db.archetypes.count());
-    
+
     try db.removeEntity(entity_id);
-    
+
     // Database should be completely clean
     try testing.expectEqual(@as(usize, 0), db.archetypes.count());
     try testing.expectEqual(null, db.getEntity(entity_id));
-    
+
     // Should be able to create new entities normally after cleanup
     const new_entity = try db.createEntity(.{ .position = Position{ .x = 5.0, .y = 15.0 } });
     try testing.expect(db.getEntity(new_entity) != null);
@@ -199,31 +199,25 @@ test "Database removeEntity - memory safety with complex components" {
     defer db.deinit();
 
     // Create entities with large components to test memory management
-    const entity1 = try db.createEntity(.{ 
-        .position = Position{ .x = 1.0, .y = 2.0 },
-        .large_component = LargeComponent{ .data = [_]u8{1} ** 1024, .id = 123 }
-    });
-    
-    const entity2 = try db.createEntity(.{ 
-        .position = Position{ .x = 3.0, .y = 4.0 },
-        .large_component = LargeComponent{ .data = [_]u8{2} ** 1024, .id = 456 }
-    });
+    const entity1 = try db.createEntity(.{ .position = Position{ .x = 1.0, .y = 2.0 }, .large_component = LargeComponent{ .data = [_]u8{1} ** 1024, .id = 123 } });
+
+    const entity2 = try db.createEntity(.{ .position = Position{ .x = 3.0, .y = 4.0 }, .large_component = LargeComponent{ .data = [_]u8{2} ** 1024, .id = 456 } });
 
     // Verify entities exist and have correct data
     const entity1_ref = db.getEntity(entity1).?;
     const entity2_ref = db.getEntity(entity2).?;
-    
+
     try testing.expectEqual(@as(u64, 123), entity1_ref.get(LargeComponent).?.id);
     try testing.expectEqual(@as(u64, 456), entity2_ref.get(LargeComponent).?.id);
-    
+
     // Remove first entity
     try db.removeEntity(entity1);
-    
+
     // Second entity should still have correct data (no memory corruption)
     const entity2_after = db.getEntity(entity2).?;
     try testing.expectEqual(@as(u64, 456), entity2_after.get(LargeComponent).?.id);
     try testing.expectEqual(@as(u8, 2), entity2_after.get(LargeComponent).?.data[0]);
-    
+
     // Remove second entity - should clean up archetype
     try db.removeEntity(entity2);
     try testing.expectEqual(@as(usize, 0), db.archetypes.count());
@@ -244,10 +238,10 @@ test "Database removeComponents - remove from entity" {
     const entity = db.getEntity(entity_id).?;
     const archetype = db.archetypes.get(entity.archetype_id).?;
     try testing.expectEqual(@as(usize, 1), archetype.columns.len);
-    
+
     // Should still have Position component
     try testing.expectEqual(TestPositions.basic.x, entity.get(Position).?.x);
-    
+
     // Should not have Health component
     try testing.expectEqual(@as(?*Health, null), entity.get(Health));
 }
@@ -266,7 +260,7 @@ test "Database removeComponents - remove non-existent component (no-op)" {
 
     // Should still have the same number of archetypes
     try testing.expectEqual(original_archetype_count, db.archetypes.count());
-    
+
     // Entity should still have original position
     const entity = db.getEntity(entity_id).?;
     try testing.expectEqual(TestPositions.basic.x, entity.get(Position).?.x);
@@ -293,7 +287,7 @@ test "Database archetype pruning - empty archetype gets cleaned up" {
     // Create two entities with same archetype
     const entity1 = try db.createEntity(.{ .position = Position{ .x = 1.0, .y = 2.0 } });
     const entity2 = try db.createEntity(.{ .position = Position{ .x = 3.0, .y = 4.0 } });
-    
+
     try testing.expectEqual(@as(usize, 1), db.archetypes.count());
 
     // Add Health to both entities (they move to new archetype)
@@ -306,7 +300,7 @@ test "Database archetype pruning - empty archetype gets cleaned up" {
     // Verify both entities are in the new archetype and have both components
     const entity1_ref = db.getEntity(entity1).?;
     const entity2_ref = db.getEntity(entity2).?;
-    
+
     try testing.expectEqual(entity1_ref.archetype_id, entity2_ref.archetype_id);
     try testing.expectEqual(@as(f32, 1.0), entity1_ref.get(Position).?.x);
     try testing.expectEqual(@as(i32, 100), entity1_ref.get(Health).?.current);
@@ -321,22 +315,19 @@ test "Database complex component operations" {
 
     // Create entity with Position
     const entity_id = try db.createEntity(.{ .position = Position{ .x = 1.0, .y = 2.0 } });
-    
+
     // Add multiple components
-    try db.addComponents(entity_id, .{ 
-        .health = Health{ .current = 100, .max = 100 },
-        .velocity = Velocity{ .dx = 0.5, .dy = -0.5 }
-    });
-    
+    try db.addComponents(entity_id, .{ .health = Health{ .current = 100, .max = 100 }, .velocity = Velocity{ .dx = 0.5, .dy = -0.5 } });
+
     // Verify entity has all three components
     const entity = db.getEntity(entity_id).?;
     try testing.expectEqual(@as(f32, 1.0), entity.get(Position).?.x);
     try testing.expectEqual(@as(i32, 100), entity.get(Health).?.current);
     try testing.expectEqual(@as(f32, 0.5), entity.get(Velocity).?.dx);
-    
+
     // Remove one component
     try db.removeComponents(entity_id, .{ .velocity = Velocity{ .dx = 0.0, .dy = 0.0 } });
-    
+
     // Verify entity has remaining components
     const updated_entity = db.getEntity(entity_id).?;
     try testing.expectEqual(@as(f32, 1.0), updated_entity.get(Position).?.x);
@@ -351,18 +342,18 @@ test "Database component ID consistency" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();
-    
+
     const id_before = componentId(Position);
     const entity_id = try db.createEntity(.{ .position = Position{ .x = 1.0, .y = 2.0 } });
     const id_after = componentId(Position);
-    
+
     // Component IDs must remain consistent
     try testing.expectEqual(id_before, id_after);
-    
+
     // Archetype should contain the same component ID
     const entity = db.getEntity(entity_id).?;
     const archetype = db.archetypes.get(entity.archetype_id).?;
-    
+
     var found_id = false;
     for (archetype.columns) |column| {
         if (column.meta.id == id_before) {
@@ -378,18 +369,18 @@ test "Database entity row_index tracking" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();
-    
+
     // Create multiple entities in same archetype
     const entity1_id = try db.createEntity(.{ .position = Position{ .x = 1.0, .y = 2.0 } });
     const entity2_id = try db.createEntity(.{ .position = Position{ .x = 3.0, .y = 4.0 } });
-    
+
     const entity1 = db.getEntity(entity1_id).?;
     const entity2 = db.getEntity(entity2_id).?;
-    
+
     // Verify correct row indices
     try testing.expectEqual(@as(usize, 0), entity1.row_index);
     try testing.expectEqual(@as(usize, 1), entity2.row_index);
-    
+
     // Both should be in same archetype
     try testing.expectEqual(entity1.archetype_id, entity2.archetype_id);
 }
@@ -399,23 +390,23 @@ test "Database entity get chain integrity" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();
-    
+
     const entity_id = try db.createEntity(.{ .position = Position{ .x = 1.0, .y = 2.0 } });
     const entity = db.getEntity(entity_id).?;
-    
+
     // Step 1: Database should contain the archetype
     const archetype = db.archetypes.get(entity.archetype_id);
     try testing.expect(archetype != null);
-    
+
     // Step 2: Archetype should have the column
     const pos_id = componentId(Position);
     const column = archetype.?.getColumn(pos_id);
     try testing.expect(column != null);
-    
+
     // Step 3: Column should contain the data
     const pos_ptr = column.?.get(entity.row_index, Position);
     try testing.expect(pos_ptr != null);
-    
+
     // Step 4: Entity.get() should work end-to-end
     const retrieved_pos = entity.get(Position);
     try testing.expect(retrieved_pos != null);

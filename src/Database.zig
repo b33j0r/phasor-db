@@ -88,7 +88,7 @@ pub fn createEntity(self: *Database, components: anytype) !Entity.Id {
         .id = entity_id,
         .database = self,
         .archetype_id = archetype_id,
-        .row_index = entity_index,  // Row index within the archetype
+        .row_index = entity_index, // Row index within the archetype
     };
 
     try self.entities.put(self.allocator, entity_id, entity);
@@ -105,7 +105,7 @@ fn pruneIfEmpty(self: *Database, archetype: *Archetype) void {
         for (archetype.columns) |column| {
             std.debug.assert(column.len == 0);
         }
-        
+
         // Find the archetype key to remove (safer than iterator + modification)
         var key_to_remove: ?Archetype.Id = null;
         var iterator = self.archetypes.iterator();
@@ -115,7 +115,7 @@ fn pruneIfEmpty(self: *Database, archetype: *Archetype) void {
                 break;
             }
         }
-        
+
         // Remove the archetype if found
         if (key_to_remove) |key| {
             // Get the archetype to deinitialize it
@@ -139,7 +139,7 @@ pub fn addComponents(
     // Create ComponentSet from existing archetype components
     var existing_set = ComponentSet.init(self.allocator);
     defer existing_set.deinit();
-    
+
     // Get fresh pointer to avoid invalidation issues
     const src_archetype = self.archetypes.getPtr(src_archetype_id).?;
     for (src_archetype.columns) |column| {
@@ -173,11 +173,11 @@ pub fn addComponents(
 
     // Move entity data from source archetype to destination archetype
     const src_row_index = entity.row_index;
-    
+
     // Add entity ID to new archetype first
     try new_archetype.?.entity_ids.append(self.allocator, entity_id);
     const new_entity_index = new_archetype.?.entity_ids.items.len - 1;
-    
+
     // Copy existing component data to matching columns in new archetype
     // We need to copy raw bytes since we don't know the component types at runtime
     // Get fresh pointer to source archetype after hashmap operations
@@ -189,7 +189,7 @@ pub fn addComponents(
                 // Copy raw bytes from source to destination
                 const src_offset = src_row_index * src_column.meta.stride;
                 const src_data = src_column.buffer.data[src_offset .. src_offset + src_column.meta.size];
-                
+
                 // Ensure destination has capacity
                 try dest_column.ensureTotalCapacity(dest_column.len + 1);
                 const dst_offset = dest_column.len * dest_column.meta.stride;
@@ -199,14 +199,14 @@ pub fn addComponents(
             }
         }
     }
-    
+
     // Add new component data to new archetype
     const fields = std.meta.fields(@TypeOf(components));
     inline for (fields) |field| {
         const component_value = @field(components, field.name);
         const ComponentType = @TypeOf(component_value);
         const comp_id = root.componentId(ComponentType);
-        
+
         // Check if this component is actually new (not already in the source archetype)
         var is_new_component = true;
         for (src_archetype_fresh.columns) |src_column| {
@@ -215,7 +215,7 @@ pub fn addComponents(
                 break;
             }
         }
-        
+
         // Only append if it's a truly new component
         if (is_new_component) {
             // Find the column for this component in the new archetype
@@ -227,7 +227,7 @@ pub fn addComponents(
             }
         }
     }
-    
+
     // Remove entity from source archetype
     _ = try src_archetype_fresh.removeEntityByIndex(src_row_index);
 
@@ -240,10 +240,10 @@ pub fn addComponents(
             try self.entities.put(self.allocator, moved_id, me);
         }
     }
-    
+
     // Clean up source archetype if it's now empty
     self.pruneIfEmpty(src_archetype_fresh);
-    
+
     // Update entity record
     var updated_entity = entity;
     updated_entity.archetype_id = new_archetype_id;
@@ -262,7 +262,7 @@ pub fn removeComponents(
     // Create ComponentSet from existing archetype components
     var existing_set = ComponentSet.init(self.allocator);
     defer existing_set.deinit();
-    
+
     // Get fresh pointer to avoid invalidation issues
     const src_archetype = self.archetypes.getPtr(src_archetype_id).?;
     for (src_archetype.columns) |column| {
@@ -301,11 +301,11 @@ pub fn removeComponents(
 
     // Move entity data from source archetype to destination archetype
     const src_row_index = entity.row_index;
-    
+
     // Add entity ID to new archetype first
     try new_archetype.?.entity_ids.append(self.allocator, entity_id);
     const new_entity_index = new_archetype.?.entity_ids.items.len - 1;
-    
+
     // Copy existing component data to matching columns in new archetype
     // Only copy components that are NOT being removed
     // Get fresh pointer to source archetype after hashmap operations
@@ -319,7 +319,7 @@ pub fn removeComponents(
                 break;
             }
         }
-        
+
         if (should_keep) {
             // Find matching column in new archetype
             for (new_archetype.?.columns) |*dest_column| {
@@ -327,7 +327,7 @@ pub fn removeComponents(
                     // Copy raw bytes from source to destination
                     const src_offset = src_row_index * src_column.meta.stride;
                     const src_data = src_column.buffer.data[src_offset .. src_offset + src_column.meta.size];
-                    
+
                     // Ensure destination has capacity
                     try dest_column.ensureTotalCapacity(dest_column.len + 1);
                     const dst_offset = dest_column.len * dest_column.meta.stride;
@@ -338,7 +338,7 @@ pub fn removeComponents(
             }
         }
     }
-    
+
     // Remove entity from source archetype
     _ = try src_archetype_fresh.removeEntityByIndex(src_row_index);
 
@@ -351,10 +351,10 @@ pub fn removeComponents(
             try self.entities.put(self.allocator, moved_id, me);
         }
     }
-    
+
     // Clean up source archetype if it's now empty
     self.pruneIfEmpty(src_archetype_fresh);
-    
+
     // Update entity record
     var updated_entity = entity;
     updated_entity.archetype_id = new_archetype_id;
@@ -373,9 +373,9 @@ pub fn query(self: *Database, spec: anytype) !QueryResult {
 
         // Handle the case where the field contains a type (not an instance)
         const component_id = if (field_type == type)
-            componentId(field_value)  // field_value is the actual type
+            componentId(field_value) // field_value is the actual type
         else
-            componentId(field_type);  // field_value is an instance, so get its type
+            componentId(field_type); // field_value is an instance, so get its type
 
         try component_ids.append(self.allocator, component_id);
     }
