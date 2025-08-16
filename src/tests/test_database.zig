@@ -601,3 +601,26 @@ test "Database createEntity same types different values should share archetype" 
     // Should only have one archetype total
     try testing.expectEqual(@as(usize, 1), db.archetypes.count());
 }
+
+test "Database addComponents with runtime values" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create an entity with Position
+    const entity_id = try db.createEntity(.{ .position = Position{ .x = 1.0, .y = 2.0 } });
+
+    // Add Health component with runtime values
+    const health_current: i32 = 50; // Not comptime-known
+    const health_max: i32 = 100; // Not comptime-known
+
+    try db.addComponents(entity_id, .{
+        Health{ .current = health_current, .max = health_max },
+    });
+
+    // Verify entity has both components
+    const entity = db.getEntity(entity_id).?;
+    try testing.expectEqual(@as(f32, 1.0), entity.get(Position).?.x);
+    try testing.expectEqual(@as(i32, 50), entity.get(Health).?.current);
+    try testing.expectEqual(@as(i32, 100), entity.get(Health).?.max);
+}

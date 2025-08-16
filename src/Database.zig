@@ -74,13 +74,17 @@ pub fn createEntity(self: *Database, components: anytype) !Entity.Id {
     const entity_id = self.next_entity_id;
     self.next_entity_id += 1;
 
-    const archetype_id = Archetype.calculateId(components);
+    // Use runtime version of ComponentSet.fromComponents
+    var component_set = try ComponentSet.fromComponentsRuntime(self.allocator, components);
+    defer component_set.deinit();
+
+    const archetype_id = component_set.calculateId();
 
     // Get or create the archetype for this combination of components
     var archetype = self.archetypes.getPtr(archetype_id);
     if (archetype == null) {
-        // Create new archetype if it doesn't exist
-        const new_archetype = try Archetype.fromComponents(self.allocator, components);
+        // Create new archetype from ComponentSet (same as addComponents)
+        const new_archetype = try Archetype.fromComponentSet(self.allocator, &component_set);
         try self.archetypes.put(self.allocator, archetype_id, new_archetype);
         archetype = self.archetypes.getPtr(archetype_id);
     }
@@ -88,12 +92,12 @@ pub fn createEntity(self: *Database, components: anytype) !Entity.Id {
     // Add the entity to the archetype's entity list and component data
     const entity_index = try archetype.?.addEntity(entity_id, components);
 
-    // Create and store the Entity record that tracks which archetype and row this entity is in
+    // Create and store the Entity record
     const entity = Entity{
         .id = entity_id,
         .database = self,
         .archetype_id = archetype_id,
-        .row_index = entity_index, // Row index within the archetype
+        .row_index = entity_index,
     };
 
     try self.entities.put(self.allocator, entity_id, entity);

@@ -75,7 +75,7 @@ pub fn getColumnIndexByType(
     return self.getColumnIndexById(target_id);
 }
 
-fn getSortedComponentIds(comptime components: anytype) [std.meta.fields(@TypeOf(components)).len]ComponentId {
+fn getSortedComponentIds(components: anytype) [std.meta.fields(@TypeOf(components)).len]ComponentId {
     const fields = std.meta.fields(@TypeOf(components));
 
     comptime var component_ids: [fields.len]ComponentId = undefined;
@@ -94,6 +94,31 @@ fn getSortedComponentIds(comptime components: anytype) [std.meta.fields(@TypeOf(
 
     return component_ids;
 }
+
+// Sorted component IDs from the tuple TYPE (not the value)
+fn getSortedComponentIdsFromType(comptime TupleT: type) [std.meta.fields(TupleT).len]ComponentId {
+    const fields = std.meta.fields(TupleT);
+    comptime var ids: [fields.len]ComponentId = undefined;
+
+    inline for (fields, 0..) |fld, i| {
+        ids[i] = componentId(fld.type);
+    }
+
+    // Sort deterministically at comptime
+    comptime std.sort.pdq(ComponentId, &ids, {}, std.sort.asc(ComponentId));
+    return ids;
+}
+
+// Archetype id derived purely from the component tuple type
+pub fn idFromType(comptime TupleT: type) Id {
+    const ids = comptime getSortedComponentIdsFromType(TupleT);
+    var hasher = std.hash.XxHash64.init(0);
+    inline for (ids) |id| {
+        hasher.update(std.mem.asBytes(&id));
+    }
+    return hasher.final();
+}
+
 
 pub fn calculateId(comptime components: anytype) Id {
     const sorted_ids = comptime getSortedComponentIds(components);
@@ -185,7 +210,7 @@ pub fn addEntity(
     }
 
     // Get sorted component IDs from the input
-    const input_sorted_ids = comptime getSortedComponentIds(components);
+    const input_sorted_ids = comptime getSortedComponentIdsFromType(@TypeOf(components));
 
     // Verify that the component types match exactly
     for (input_sorted_ids, self.name) |input_id, archetype_id| {

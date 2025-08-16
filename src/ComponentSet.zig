@@ -39,6 +39,25 @@ pub fn fromComponents(allocator: std.mem.Allocator, comptime components: anytype
     return set;
 }
 
+pub fn fromComponentsRuntime(allocator: std.mem.Allocator, components: anytype) !ComponentSet {
+    var set = ComponentSet.init(allocator);
+
+    const Tup = @TypeOf(components);
+    const info = @typeInfo(Tup).@"struct";
+
+    try set.items.ensureTotalCapacity(allocator, info.fields.len);
+
+    // Create ComponentMeta for each component using runtime type inspection
+    inline for (info.fields) |field| {
+        const component_value = @field(components, field.name);
+        const ComponentT = @TypeOf(component_value);
+        const meta = ComponentMeta.from(ComponentT);
+        try set.insertSorted(meta);
+    }
+
+    return set;
+}
+
 pub fn fromSlice(allocator: std.mem.Allocator, metas: []const ComponentMeta) !ComponentSet {
     var set = ComponentSet.init(allocator);
     try set.items.ensureTotalCapacity(allocator, metas.len);
