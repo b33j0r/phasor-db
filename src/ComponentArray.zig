@@ -230,3 +230,32 @@ pub fn shrinkAndFree(self: *ComponentArray, new_capacity: usize) !void {
     self.data = new_data;
     self.capacity = actual_capacity;
 }
+
+/// Copies an element from this ComponentArray to the end of another ComponentArray.
+/// Both arrays must have the same component type (same meta.id and meta.size).
+/// The destination array will be expanded to accommodate the new element.
+pub fn copyElementToEnd(
+    self: *const ComponentArray,
+    src_index: usize,
+    dest_array: *ComponentArray,
+) !void {
+    if (src_index >= self.len) return error.IndexOutOfBounds;
+    if (self.meta.id != dest_array.meta.id) return error.ComponentTypeMismatch;
+    if (self.meta.size != dest_array.meta.size) return error.ComponentSizeMismatch;
+
+    // Ensure destination has capacity for one more element
+    try dest_array.ensureTotalCapacity(dest_array.len + 1);
+
+    // Zero-sized components are a no-op, but we still increment the length at the end
+    if (self.meta.size != 0) {
+        const src_offset = src_index * self.meta.stride;
+        const dest_offset = dest_array.len * dest_array.meta.stride;
+
+        @memcpy(
+            dest_array.data[dest_offset .. dest_offset + self.meta.size],
+            self.data[src_offset .. src_offset + self.meta.size]
+        );
+    }
+
+    dest_array.len += 1;
+}

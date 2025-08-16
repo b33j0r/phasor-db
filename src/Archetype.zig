@@ -245,3 +245,35 @@ pub fn hasComponents(
     }
     return true;
 }
+
+/// Copies an entity from this archetype to another archetype.
+/// Only copies components that exist in both archetypes.
+/// Returns the new entity index in the destination archetype.
+pub fn copyEntityTo(
+    self: *Archetype,
+    entity_index: usize,
+    dest_archetype: *Archetype,
+) !usize {
+    if (entity_index >= self.entity_ids.items.len) {
+        return error.IndexOutOfBounds;
+    }
+
+    const entity_id = self.entity_ids.items[entity_index];
+
+    // Add entity ID to destination archetype first
+    try dest_archetype.entity_ids.append(dest_archetype.allocator, entity_id);
+    const new_entity_index = dest_archetype.entity_ids.items.len - 1;
+
+    // Copy component data for matching components between archetypes
+    for (self.columns) |*src_column| {
+        // Find matching column in destination archetype
+        for (dest_archetype.columns) |*dest_column| {
+            if (dest_column.meta.id == src_column.meta.id) {
+                try src_column.copyElementToEnd(entity_index, dest_column);
+                break;
+            }
+        }
+    }
+
+    return new_entity_index;
+}

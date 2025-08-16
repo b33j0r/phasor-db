@@ -173,30 +173,21 @@ pub fn addComponents(
 
     // Move entity data from source archetype to destination archetype
     const src_row_index = entity.row_index;
-
-    // Add entity ID to new archetype first
-    try new_archetype.?.entity_ids.append(self.allocator, entity_id);
-    const new_entity_index = new_archetype.?.entity_ids.items.len - 1;
-
-    // Copy existing component data to matching columns in new archetype
-    // We need to copy raw bytes since we don't know the component types at runtime
+    
     // Get fresh pointer to source archetype after hashmap operations
     const src_archetype_fresh = self.archetypes.getPtr(src_archetype_id).?;
-    for (src_archetype_fresh.columns) |*src_column| {
-        // Find matching column in new archetype
-        for (new_archetype.?.columns) |*dest_column| {
-            if (dest_column.meta.id == src_column.meta.id) {
-                // Copy raw bytes from source to destination
-                const src_offset = src_row_index * src_column.meta.stride;
-                const src_data = src_column.data[src_offset .. src_offset + src_column.meta.size];
+    
+    // Use the proper abstraction to copy entity between archetypes
+    const new_entity_index = try src_archetype_fresh.copyEntityTo(src_row_index, new_archetype.?);
+    
+    // Remove entity from source archetype and handle bookkeeping
+    _ = try src_archetype_fresh.removeEntityByIndex(src_row_index);
 
-                // Ensure destination has capacity
-                try dest_column.ensureTotalCapacity(dest_column.len + 1);
-                const dst_offset = dest_column.len * dest_column.meta.stride;
-                @memcpy(dest_column.data[dst_offset .. dst_offset + dest_column.meta.size], src_data);
-                dest_column.len += 1;
-                break;
-            }
+    // If a swap occurred during removal, update the moved entity's row_index bookkeeping
+    if (src_row_index < src_archetype_fresh.entity_ids.items.len) {
+        const moved_id = src_archetype_fresh.entity_ids.items[src_row_index];
+        if (self.entities.getPtr(moved_id)) |moved_entity_ptr| {
+            moved_entity_ptr.row_index = src_row_index;
         }
     }
 
@@ -228,21 +219,12 @@ pub fn addComponents(
         }
     }
 
-    // Remove entity from source archetype
-    _ = try src_archetype_fresh.removeEntityByIndex(src_row_index);
-
-    // If a swap occurred, update the moved entity's row_index bookkeeping
-    if (src_row_index < src_archetype_fresh.entity_ids.items.len) {
-        const moved_id = src_archetype_fresh.entity_ids.items[src_row_index];
-        if (self.entities.get(moved_id)) |moved_entity| {
-            var me = moved_entity;
-            me.row_index = src_row_index;
-            try self.entities.put(self.allocator, moved_id, me);
-        }
-    }
-
+    // Note: moveEntityTo() already removed the entity from source archetype and handled bookkeeping
+    // Get fresh pointer to source archetype for cleanup check
+    const src_archetype_for_cleanup = self.archetypes.getPtr(src_archetype_id).?;
+    
     // Clean up source archetype if it's now empty
-    self.pruneIfEmpty(src_archetype_fresh);
+    self.pruneIfEmpty(src_archetype_for_cleanup);
 
     // Update entity record
     var updated_entity = entity;
@@ -301,59 +283,29 @@ pub fn removeComponents(
 
     // Move entity data from source archetype to destination archetype
     const src_row_index = entity.row_index;
-
-    // Add entity ID to new archetype first
-    try new_archetype.?.entity_ids.append(self.allocator, entity_id);
-    const new_entity_index = new_archetype.?.entity_ids.items.len - 1;
-
-    // Copy existing component data to matching columns in new archetype
-    // Only copy components that are NOT being removed
+    
     // Get fresh pointer to source archetype after hashmap operations
     const src_archetype_fresh = self.archetypes.getPtr(src_archetype_id).?;
-    for (src_archetype_fresh.columns) |*src_column| {
-        // Check if this component should be kept (exists in diff_set)
-        var should_keep = false;
-        for (diff_set.items.items) |meta| {
-            if (meta.id == src_column.meta.id) {
-                should_keep = true;
-                break;
-            }
-        }
-
-        if (should_keep) {
-            // Find matching column in new archetype
-            for (new_archetype.?.columns) |*dest_column| {
-                if (dest_column.meta.id == src_column.meta.id) {
-                    // Copy raw bytes from source to destination
-                    const src_offset = src_row_index * src_column.meta.stride;
-                    const src_data = src_column.data[src_offset .. src_offset + src_column.meta.size];
-
-                    // Ensure destination has capacity
-                    try dest_column.ensureTotalCapacity(dest_column.len + 1);
-                    const dst_offset = dest_column.len * dest_column.meta.stride;
-                    @memcpy(dest_column.data[dst_offset .. dst_offset + dest_column.meta.size], src_data);
-                    dest_column.len += 1;
-                    break;
-                }
-            }
-        }
-    }
-
-    // Remove entity from source archetype
+    
+    // Use the proper abstraction to copy entity between archetypes
+    const new_entity_index = try src_archetype_fresh.copyEntityTo(src_row_index, new_archetype.?);
+    
+    // Remove entity from source archetype and handle bookkeeping
     _ = try src_archetype_fresh.removeEntityByIndex(src_row_index);
 
-    // If a swap occurred, update the moved entity's row_index bookkeeping
+    // If a swap occurred during removal, update the moved entity's row_index bookkeeping
     if (src_row_index < src_archetype_fresh.entity_ids.items.len) {
         const moved_id = src_archetype_fresh.entity_ids.items[src_row_index];
-        if (self.entities.get(moved_id)) |moved_entity| {
-            var me = moved_entity;
-            me.row_index = src_row_index;
-            try self.entities.put(self.allocator, moved_id, me);
+        if (self.entities.getPtr(moved_id)) |moved_entity_ptr| {
+            moved_entity_ptr.row_index = src_row_index;
         }
     }
 
+    // Get fresh pointer to source archetype for cleanup check
+    const src_archetype_for_cleanup = self.archetypes.getPtr(src_archetype_id).?;
+    
     // Clean up source archetype if it's now empty
-    self.pruneIfEmpty(src_archetype_fresh);
+    self.pruneIfEmpty(src_archetype_for_cleanup);
 
     // Update entity record
     var updated_entity = entity;
