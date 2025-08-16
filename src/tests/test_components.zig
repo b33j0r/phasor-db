@@ -1,9 +1,8 @@
 const std = @import("std");
 const testing = std.testing;
 const root = @import("../root.zig");
-const components = root.components;
-const ComponentArray = components.ComponentArray;
-const componentId = components.componentId;
+const ComponentArray = root.ComponentArray;
+const componentId = root.componentId;
 
 const fixtures = @import("fixtures.zig");
 const Position = fixtures.Position;
