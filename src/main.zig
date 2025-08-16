@@ -27,4 +27,23 @@ pub fn main() !void {
 
     std.debug.print("Entity Position: ({}, {})\n", .{ position.x, position.y });
     std.debug.print("Entity Velocity: ({}, {})\n", .{ velocity.x, velocity.y });
+
+    // Add another entity
+    _ = try db.createEntity(.{
+        Position{ .x = 10.0, .y = 10.0 },
+        Velocity{ .x = 2.0, .y = 2.0 },
+    });
+
+    // Query all entities with Position and Velocity components
+    var query = try db.query(.{Position, Velocity});
+    defer query.deinit();
+
+    var iterator = query.iterator();
+    while (iterator.next()) |matched_entity| {
+        const pos = matched_entity.get(Position).?;
+        const vel = matched_entity.get(Velocity).?;
+        std.debug.print("Queried Entity Position: ({}, {})\n", .{ pos.x, pos.y });
+        std.debug.print("Queried Entity Velocity: ({}, {})\n", .{ vel.x, vel.y });
+    }
+
 }
