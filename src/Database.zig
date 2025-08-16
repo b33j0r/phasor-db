@@ -4,6 +4,8 @@ const Entity = root.Entity;
 const Archetype = root.Archetype;
 const ComponentSet = root.ComponentSet;
 const ComponentMeta = root.ComponentMeta;
+const ComponentId = root.ComponentId;
+const componentId = root.componentId;
 
 allocator: std.mem.Allocator,
 archetypes: std.AutoArrayHashMapUnmanaged(Archetype.Id, Archetype) = .empty,
@@ -360,3 +362,56 @@ pub fn removeComponents(
     updated_entity.row_index = new_entity_index;
     try self.entities.put(self.allocator, entity_id, updated_entity);
 }
+
+pub fn query(self: *Database, spec: anytype) !QueryResult {
+    var archetype_ids: std.ArrayListUnmanaged(Archetype.Id) = .empty;
+    var component_ids: std.ArrayListUnmanaged(ComponentId) = .empty;
+    defer component_ids.deinit(self.allocator);
+    const spec_info = @typeInfo(@TypeOf(spec)).@"struct";
+    inline for (spec_info.fields) |field| {
+        const field_value = @field(spec, field.name);
+        const field_type = @TypeOf(field_value);
+
+        // Handle the case where the field contains a type (not an instance)
+        const component_id = if (field_type == type)
+            componentId(field_value)  // field_value is the actual type
+        else
+            componentId(field_type);  // field_value is an instance, so get its type
+
+        try component_ids.append(self.allocator, component_id);
+    }
+
+    var it = self.archetypes.iterator();
+    while (it.next()) |entry| {
+        const archetype = entry.value_ptr;
+        if (archetype.hasComponents(component_ids.items)) {
+            try archetype_ids.append(self.allocator, archetype.id);
+        }
+    }
+
+    return QueryResult{
+        .allocator = self.allocator,
+        .database = self,
+        .archetype_ids = archetype_ids,
+    };
+}
+
+pub const QueryResult = struct {
+    allocator: std.mem.Allocator,
+    database: *Database,
+    archetype_ids: std.ArrayListUnmanaged(Archetype.Id),
+
+    pub fn deinit(self: *QueryResult) void {
+        self.archetype_ids.deinit(self.allocator);
+    }
+
+    pub fn count(self: *const QueryResult) usize {
+        // add up the entity counts in all matching archetypes
+        var total_count: usize = 0;
+        for (self.archetype_ids.items) |archetype_id| {
+            const archetype = self.database.archetypes.get(archetype_id) orelse continue;
+            total_count += archetype.entity_ids.items.len;
+        }
+        return total_count;
+    }
+};

@@ -422,3 +422,31 @@ test "Database entity get chain integrity" {
     try testing.expectEqual(@as(f32, 1.0), retrieved_pos.?.x);
     try testing.expectEqual(@as(f32, 2.0), retrieved_pos.?.y);
 }
+
+test "Database query one component" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create multiple entities with Position
+    _ = try db.createEntity(.{ .position = Position{ .x = 1.0, .y = 2.0 } });
+    _ = try db.createEntity(.{ .position = Position{ .x = 3.0, .y = 4.0 } });
+
+    // Query for entities with Position
+    var positions = try db.query(.{Position});
+    defer positions.deinit();
+    try testing.expectEqual(2, positions.count());
+    // var iter = positions.iterator();
+    // while (iter.next()) |entity| {
+    //     const pos = entity.get(Position).?;
+    //     if (entity.id == entity1_id) {
+    //         try testing.expectEqual(@as(f32, 1.0), pos.x);
+    //         try testing.expectEqual(@as(f32, 2.0), pos.y);
+    //     } else if (entity.id == entity2_id) {
+    //         try testing.expectEqual(@as(f32, 3.0), pos.x);
+    //         try testing.expectEqual(@as(f32, 4.0), pos.y);
+    //     } else {
+    //         try testing.expect(false);
+    //     }
+    // }
+}

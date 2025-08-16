@@ -231,3 +231,15 @@ pub fn removeEntityByIndex(
 
     return entity_id;
 }
+
+pub fn hasComponents(
+    self: *const Archetype,
+    components: []ComponentId,
+) bool {
+    for (components) |comp_id| {
+        if (self.getColumn(comp_id) == null) {
+            return false;
+        }
+    }
+    return true;
+}
