@@ -1,3 +1,7 @@
+//! `Database` is the primary user interface for the `phasor-db` library.
+//! It stores entity-component data in archetype tables. This is abstracted
+//! behind the `createEntity`, `getEntity`, `removeEntity`, `addComponents`,
+//! `removeComponents`, and `query` methods.
 const std = @import("std");
 const root = @import("root.zig");
 const Entity = root.Entity;
