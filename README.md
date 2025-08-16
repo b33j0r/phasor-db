@@ -1,4 +1,5 @@
-# `phasor-db`
+
+![phasor-logo.png](docs/phasor-logo.png)
 
 The `phasor-db` library is an Entity-Component-System database. For a more complete ECS library, see [phasor](https://github.com/b33j0r/phasor), which uses this as a dependency.
 
