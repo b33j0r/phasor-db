@@ -56,18 +56,6 @@ test "componentId generates the same ID from a value and its type" {
     try testing.expectEqual(pos_id, pos_type_id);
 }
 
-test "ComponentMeta from detects traits" {
-    const Superclass = struct {
-        id: u64,
-    };
-    const Subclass = struct {
-        id: u64,
-        pub const __trait__ = Superclass;
-    };
-    const meta = root.ComponentMeta.from(Subclass);
-    try testing.expectEqual(componentId(Superclass), meta.trait);
-}
-
 test "ComponentArray initialization and deinitialization" {
     const allocator = testing.allocator;
 
@@ -362,7 +350,6 @@ test "ComponentArray large component handling" {
         componentId(LargeComponent),
         @sizeOf(LargeComponent),
         @alignOf(LargeComponent),
-        null,
     );
     defer large_array.deinit();
 

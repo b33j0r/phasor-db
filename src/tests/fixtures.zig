@@ -65,7 +65,6 @@ pub fn createPositionArray(allocator: std.mem.Allocator) ComponentArray {
         componentId(Position),
         @sizeOf(Position),
         @alignOf(Position),
-        null,
     );
 }
 
@@ -76,7 +75,6 @@ pub fn createHealthArray(allocator: std.mem.Allocator) ComponentArray {
         componentId(Health),
         @sizeOf(Health),
         @alignOf(Health),
-        null,
     );
 }
 
@@ -87,7 +85,6 @@ pub fn createMarkerArray(allocator: std.mem.Allocator) ComponentArray {
         componentId(Marker),
         @sizeOf(Marker),
         @alignOf(Marker),
-        null,
     );
 }
 
@@ -98,7 +95,6 @@ pub fn createPopulatedArray(allocator: std.mem.Allocator, comptime T: type, item
         componentId(T),
         @sizeOf(T),
         @alignOf(T),
-        null,
     );
 
     for (items) |item| {
