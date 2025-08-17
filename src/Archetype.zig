@@ -14,6 +14,35 @@ entity_ids: std.ArrayListUnmanaged(Entity.Id),
 pub const Archetype = @This();
 pub const Id = u64;
 
+pub fn fromComponentSet(
+    allocator: std.mem.Allocator,
+    component_set: *const root.ComponentSet,
+) !Archetype {
+    const len = component_set.len();
+    if (len == 0) {
+        return error.EmptyComponentSet;
+    }
+
+    // Allocate arrays for component IDs and columns
+    const component_ids = try allocator.alloc(ComponentId, len);
+    const columns = try allocator.alloc(ComponentArray, len);
+
+    // The ComponentSet is already sorted, so we can iterate directly
+    for (component_set.items.items, 0..) |meta, i| {
+        component_ids[i] = meta.id;
+        columns[i] = ComponentArray.initFromType(
+            allocator,
+            meta.id,
+            meta.size,
+            meta.alignment,
+        );
+    }
+
+    const archetype_id = component_set.calculateId();
+
+    return Archetype.init(allocator, archetype_id, component_ids, columns);
+}
+
 pub fn init(
     allocator: std.mem.Allocator,
     id: Id,
@@ -140,35 +169,6 @@ pub fn calculateId(comptime components: anytype) Id {
         hasher.update(std.mem.asBytes(&comp_id));
     }
     return hasher.final();
-}
-
-pub fn fromComponentSet(
-    allocator: std.mem.Allocator,
-    component_set: *const root.ComponentSet,
-) !Archetype {
-    const len = component_set.len();
-    if (len == 0) {
-        return error.EmptyComponentSet;
-    }
-
-    // Allocate arrays for component IDs and columns
-    const component_ids = try allocator.alloc(ComponentId, len);
-    const columns = try allocator.alloc(ComponentArray, len);
-
-    // The ComponentSet is already sorted, so we can iterate directly
-    for (component_set.items.items, 0..) |meta, i| {
-        component_ids[i] = meta.id;
-        columns[i] = ComponentArray.initFromType(
-            allocator,
-            meta.id,
-            meta.size,
-            meta.alignment,
-        );
-    }
-
-    const archetype_id = component_set.calculateId();
-
-    return Archetype.init(allocator, archetype_id, component_ids, columns);
 }
 
 /// Adds an entity to the archetype with the provided components.
