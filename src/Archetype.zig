@@ -81,8 +81,8 @@ pub fn getColumn(
         if (column.meta.id == component_id) {
             return column;
         }
-        if (column.meta.trait) |trait_id| {
-            if (trait_id == component_id) {
+        if (column.meta.trait) |trait| {
+            if (trait.id == component_id) {
                 return column;
             }
         }

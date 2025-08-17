@@ -56,7 +56,7 @@ test "componentId generates the same ID from a value and its type" {
     try testing.expectEqual(pos_id, pos_type_id);
 }
 
-test "ComponentMeta from detects traits" {
+test "ComponentMeta from - trait with identical layout" {
     const Superclass = struct {
         id: u64,
     };
@@ -65,7 +65,16 @@ test "ComponentMeta from detects traits" {
         pub const __trait__ = Superclass;
     };
     const meta = root.ComponentMeta.from(Subclass);
-    try testing.expectEqual(componentId(Superclass), meta.trait);
+    try testing.expectEqual(componentId(Superclass), meta.trait.?.id);
+    try testing.expectEqual(root.Trait.Kind.IdenticalLayout, meta.trait.?.kind);
+}
+
+test "ComponentMeta from - trait with marker" {
+    const MarkerTrait = struct {
+        pub const __trait__ = struct {};
+    };
+    const meta = root.ComponentMeta.from(MarkerTrait);
+    try testing.expectEqual(root.Trait.Kind.Marker, meta.trait.?.kind);
 }
 
 test "ComponentArray initialization and deinitialization" {

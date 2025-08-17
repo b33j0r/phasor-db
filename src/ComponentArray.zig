@@ -5,6 +5,7 @@ const std = @import("std");
 const root = @import("root.zig");
 const ComponentMeta = root.ComponentMeta;
 const ComponentId = root.ComponentId;
+const Trait = root.Trait;
 
 allocator: std.mem.Allocator,
 meta: ComponentMeta,
@@ -33,7 +34,7 @@ pub fn initFromType(
     id: ComponentId,
     size: usize,
     alignment: u29,
-    trait: ?ComponentId,
+    trait: ?Trait,
 ) ComponentArray {
     const meta = ComponentMeta.init(id, size, alignment, trait);
     return ComponentArray.init(allocator, meta);
