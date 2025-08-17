@@ -32,6 +32,11 @@ pub fn iterator(self: *const Query) Iterator {
     };
 }
 
+pub fn first(self: *const Query) ?Entity {
+    var it = self.iterator();
+    return it.next();
+}
+
 /// `Iterator` is used to iterate over entities that match the query.
 pub const Iterator = struct {
     query: *const Query,
