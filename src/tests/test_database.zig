@@ -103,6 +103,130 @@ test "Database addComponents - mixed update existing and add new" {
     try testing.expectEqual(TestVelocity.moving_right.dy, entity.get(Velocity).?.dy);
 }
 
+test "Entity has - component exists" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create an entity with Position and Health
+    const entity_id = try db.createEntity(TestEntity.healthy_positioned);
+    const entity = db.getEntity(entity_id).?;
+
+    // Test that entity has the components it was created with
+    try testing.expect(entity.has(Position));
+    try testing.expect(entity.has(Health));
+}
+
+test "Entity has - component does not exist" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create an entity with only Position
+    const entity_id = try db.createEntity(TestEntity.basic_positioned);
+    const entity = db.getEntity(entity_id).?;
+
+    // Test that entity has Position but not other components
+    try testing.expect(entity.has(Position));
+    try testing.expect(!entity.has(Health));
+    try testing.expect(!entity.has(Velocity));
+    try testing.expect(!entity.has(Marker));
+}
+
+test "Entity has - different component types" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Test with full entity containing multiple components
+    const full_entity_id = try db.createEntity(TestEntity.full_entity);
+    const full_entity = db.getEntity(full_entity_id).?;
+    
+    try testing.expect(full_entity.has(Position));
+    try testing.expect(full_entity.has(Health));
+    try testing.expect(full_entity.has(Velocity));
+    try testing.expect(!full_entity.has(Marker));
+    try testing.expect(!full_entity.has(LargeComponent));
+
+    // Test with entity containing only Marker (zero-sized component)
+    const marker_entity_id = try db.createEntity(.{ .marker = Marker{} });
+    const marker_entity = db.getEntity(marker_entity_id).?;
+    
+    try testing.expect(marker_entity.has(Marker));
+    try testing.expect(!marker_entity.has(Position));
+    try testing.expect(!marker_entity.has(Health));
+}
+
+test "Entity set - successful value setting" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create an entity with Position and Health
+    const entity_id = try db.createEntity(TestEntity.healthy_positioned);
+    var entity = db.getEntity(entity_id).?;
+
+    // Test setting Position component
+    try entity.set(TestPositions.alternative);
+    const updated_position = entity.get(Position).?;
+    try testing.expectEqual(TestPositions.alternative.x, updated_position.x);
+    try testing.expectEqual(TestPositions.alternative.y, updated_position.y);
+
+    // Test setting Health component
+    try entity.set(TestHealth.damaged);
+    const updated_health = entity.get(Health).?;
+    try testing.expectEqual(TestHealth.damaged.current, updated_health.current);
+    try testing.expectEqual(TestHealth.damaged.max, updated_health.max);
+}
+
+test "Entity set - error conditions" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create an entity with only Position
+    const entity_id = try db.createEntity(TestEntity.basic_positioned);
+    var entity = db.getEntity(entity_id).?;
+
+    // Test setting a component that doesn't exist - should return ComponentNotFound
+    const result = entity.set(TestVelocity.moving_right);
+    try testing.expectError(error.ComponentNotFound, result);
+
+    // Verify original component still works
+    try entity.set(TestPositions.third);
+    const position = entity.get(Position).?;
+    try testing.expectEqual(TestPositions.third.x, position.x);
+    try testing.expectEqual(TestPositions.third.y, position.y);
+}
+
+test "Entity set - different component types" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Test with various component types
+    const entity_id = try db.createEntity(.{
+        .position = TestPositions.basic,
+        .health = TestHealth.full,
+        .marker = Marker{},
+        .large_component = LargeComponent{},
+    });
+    var entity = db.getEntity(entity_id).?;
+
+    // Test setting different types
+    try entity.set(TestPositions.origin);
+    try entity.set(TestHealth.critical);
+    try entity.set(Marker{});
+    
+    const large_comp = LargeComponent{ .data = [_]u8{1} ** 1024, .id = 999 };
+    try entity.set(large_comp);
+
+    // Verify all values were set correctly
+    try testing.expectEqual(TestPositions.origin.x, entity.get(Position).?.x);
+    try testing.expectEqual(TestHealth.critical.current, entity.get(Health).?.current);
+    try testing.expectEqual(@as(u64, 999), entity.get(LargeComponent).?.id);
+}
+
 test "Database removeEntity" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);

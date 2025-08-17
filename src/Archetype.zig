@@ -55,6 +55,18 @@ pub fn getColumn(
     return null;
 }
 
+pub fn getColumnMut(
+    self: *Archetype,
+    component_id: ComponentId,
+) ?*ComponentArray {
+    for (self.columns) |*column| {
+        if (column.meta.id == component_id) {
+            return column;
+        }
+    }
+    return null;
+}
+
 pub fn getColumnIndexById(
     self: *const Archetype,
     component_id: ComponentId,
@@ -261,7 +273,7 @@ pub fn removeEntityByIndex(
 
 pub fn hasComponents(
     self: *const Archetype,
-    components: []ComponentId,
+    components: []const ComponentId,
 ) bool {
     for (components) |comp_id| {
         if (self.getColumn(comp_id) == null) {

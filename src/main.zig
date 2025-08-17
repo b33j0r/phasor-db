@@ -11,6 +11,9 @@ const Velocity = struct {
     y: f32,
 };
 
+// Marker components are zero-sized types
+const Player = struct {};
+
 pub fn main() !void {
     const allocator = std.heap.c_allocator;
     var db = ecs.Database.init(allocator);
@@ -34,6 +37,9 @@ pub fn main() !void {
         Velocity{ .x = 2.0, .y = 2.0 },
     });
 
+    // Add a player component to the first entity
+    try db.addComponents(entity, .{Player{}});
+
     // Query all entities with Position and Velocity components
     var query = try db.query(.{Position, Velocity});
     defer query.deinit();
@@ -42,6 +48,11 @@ pub fn main() !void {
     while (iterator.next()) |matched_entity| {
         const pos = matched_entity.get(Position).?;
         const vel = matched_entity.get(Velocity).?;
+
+        if (matched_entity.has(Player)) {
+            std.debug.print("Player Entity: {}\n", .{matched_entity.id});
+        }
+
         std.debug.print("Queried Entity Position: ({}, {})\n", .{ pos.x, pos.y });
         std.debug.print("Queried Entity Velocity: ({}, {})\n", .{ vel.x, vel.y });
     }

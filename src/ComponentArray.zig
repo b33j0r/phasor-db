@@ -74,8 +74,12 @@ pub fn get(self: *const ComponentArray, index: usize, comptime T: type) ?*T {
 
 pub fn set(self: *ComponentArray, index: usize, value: anytype) !void {
     const T = @TypeOf(value);
-    if (self.meta.size == 0 or index >= self.len) return error.IndexOutOfBounds;
+    if (index >= self.len) return error.IndexOutOfBounds;
     if (@sizeOf(T) != self.meta.size) return error.TypeMismatch;
+    
+    // For zero-sized components, no memory operation is needed
+    if (self.meta.size == 0) return;
+    
     const offset = index * self.meta.stride;
     @memcpy(self.data[offset .. offset + self.meta.size], std.mem.asBytes(&value));
 }
