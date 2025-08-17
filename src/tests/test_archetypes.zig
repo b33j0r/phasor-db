@@ -17,10 +17,11 @@ const TestPositions = fixtures.TestPositions;
 const TestHealth = fixtures.TestHealth;
 const TestVelocity = fixtures.TestVelocity;
 const TestEntity = fixtures.TestEntity;
+const archetypeFromComponents = fixtures.archetypeFromComponents;
 
 test "Archetype create empty" {
     const allocator = std.testing.allocator;
-    var archetype = try Archetype.fromComponents(allocator, .{
+    var archetype = try archetypeFromComponents(allocator, .{
         TestPositions.origin,
         TestHealth.damaged,
     });
@@ -42,7 +43,7 @@ test "Archetype calculateId" {
         TestHealth.damaged,
     });
 
-    var archetype = try Archetype.fromComponents(allocator, .{
+    var archetype = try archetypeFromComponents(allocator, .{
         TestPositions.origin,
         TestHealth.damaged,
     });
@@ -53,13 +54,13 @@ test "Archetype calculateId" {
 
 test "Archetype create with different order of components is the same" {
     const allocator = std.testing.allocator;
-    var archetype1 = try Archetype.fromComponents(allocator, .{
+    var archetype1 = try archetypeFromComponents(allocator, .{
         TestPositions.origin,
         TestHealth.damaged,
     });
     defer archetype1.deinit();
 
-    var archetype2 = try Archetype.fromComponents(allocator, .{
+    var archetype2 = try archetypeFromComponents(allocator, .{
         TestHealth.damaged,
         TestPositions.origin,
     });
@@ -70,7 +71,7 @@ test "Archetype create with different order of components is the same" {
 
 test "Archetype addEntity" {
     const allocator = std.testing.allocator;
-    var archetype = try Archetype.fromComponents(allocator, .{
+    var archetype = try archetypeFromComponents(allocator, .{
         TestPositions.origin,
         TestHealth.damaged,
     });
@@ -100,7 +101,7 @@ test "Archetype addEntity" {
 
 test "Archetype removeEntityByIndex" {
     const allocator = std.testing.allocator;
-    var archetype = try Archetype.fromComponents(allocator, .{
+    var archetype = try archetypeFromComponents(allocator, .{
         TestPositions.origin,
         TestHealth.damaged,
     });

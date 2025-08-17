@@ -4,6 +4,7 @@ const componentId = root.componentId;
 const ComponentId = root.ComponentId;
 const ComponentArray = root.ComponentArray;
 const Entity = root.Entity;
+const Archetype = root.Archetype;
 
 pub const Position = struct {
     x: f32,
@@ -101,4 +102,16 @@ pub fn createPopulatedArray(allocator: std.mem.Allocator, comptime T: type, item
     }
 
     return array;
+}
+
+pub fn archetypeFromComponents(
+    allocator: std.mem.Allocator,
+    comptime components: anytype,
+) !Archetype {
+    // Create a ComponentSet from the components (which captures traits in ComponentMeta)
+    var component_set = try root.ComponentSet.fromComponents(allocator, components);
+    defer component_set.deinit();
+
+    // Delegate to fromComponentSet - this is now the single source of truth
+    return Archetype.fromComponentSet(allocator, &component_set);
 }

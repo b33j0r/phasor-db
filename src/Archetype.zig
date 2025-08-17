@@ -142,42 +142,6 @@ pub fn calculateId(comptime components: anytype) Id {
     return hasher.final();
 }
 
-pub fn fromComponents(
-    allocator: std.mem.Allocator,
-    comptime components: anytype,
-) !Archetype {
-    const fields = std.meta.fields(@TypeOf(components));
-    const sorted_ids = comptime getSortedComponentIds(components);
-
-    // Create arrays in the same sorted order
-    var component_ids: [fields.len]ComponentId = undefined;
-    var columns: [fields.len]ComponentArray = undefined;
-
-    // Find the field for each sorted component ID and create the column
-    inline for (sorted_ids, 0..) |target_id, i| {
-        inline for (fields) |field| {
-            const component_value = @field(components, field.name);
-            const ComponentType = @TypeOf(component_value);
-            if (componentId(ComponentType) == target_id) {
-                component_ids[i] = target_id;
-                columns[i] = ComponentArray.initFromType(
-                    allocator,
-                    target_id,
-                    @sizeOf(ComponentType),
-                    @alignOf(ComponentType),
-                );
-                break;
-            }
-        }
-    }
-
-    const archetype_id = calculateId(components);
-    const name = try allocator.dupe(ComponentId, &component_ids);
-    const columns_slice = try allocator.dupe(ComponentArray, &columns);
-
-    return Archetype.init(allocator, archetype_id, name, columns_slice);
-}
-
 pub fn fromComponentSet(
     allocator: std.mem.Allocator,
     component_set: *const root.ComponentSet,

@@ -855,3 +855,53 @@ test "Query first - multiple components query" {
     try testing.expect(first_entity.?.get(Position) != null);
     try testing.expect(first_entity.?.get(Health) != null);
 }
+
+// fn Component(N: i32) type {
+//     return struct {
+//         n: i32 = N,
+//         pub const __trait__ = ComponentX;
+//     };
+// }
+//
+// const ComponentX = struct{
+//     n: i32,
+// };
+//
+// test "Query with traits - ComponentX matches Component1 and Component2" {
+//     const Component1 = Component(1);
+//     const Component2 = Component(2);
+//
+//     const allocator = std.testing.allocator;
+//     var db = Database.init(allocator);
+//     defer db.deinit();
+//
+//     // Create entities with Component1 and Component2
+//     _ = try db.createEntity(.{ Component1{ } });
+//     _ = try db.createEntity(.{ Component2{ } });
+//
+//     // The query for ComponentX should match Component1 and Component2
+//     // since they are both defined with the same __traits__
+//     var query = try db.query(.{ ComponentX });
+//     defer query.deinit();
+//
+//     try testing.expectEqual(2, query.count());
+//     var iter = query.iterator();
+//     var found_component1 = false;
+//     var found_component2 = false;
+//
+//     while (iter.next()) |entity| {
+//         const comp = entity.get(ComponentX);
+//         try testing.expect(comp != null);
+//
+//         if (comp.?.n == 1) {
+//             found_component1 = true;
+//         } else if (comp.?.n == 2) {
+//             found_component2 = true;
+//         } else {
+//             try testing.expect(false); // Should not find other values
+//         }
+//     }
+//
+//     try testing.expect(found_component1);
+//     try testing.expect(found_component2);
+// }
