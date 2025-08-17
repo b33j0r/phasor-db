@@ -33,8 +33,9 @@ pub fn initFromType(
     id: ComponentId,
     size: usize,
     alignment: u29,
+    trait: ?ComponentId,
 ) ComponentArray {
-    const meta = ComponentMeta.init(id, size, alignment);
+    const meta = ComponentMeta.init(id, size, alignment, trait);
     return ComponentArray.init(allocator, meta);
 }
 
