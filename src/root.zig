@@ -7,6 +7,7 @@ pub const Entity = @import("Entity.zig");
 pub const Query = @import("Query.zig");
 pub const ComponentArray = @import("ComponentArray.zig");
 pub const ComponentSet = @import("ComponentSet.zig");
+pub const ComponentMeta = @import("ComponentMeta.zig");
 
 /// `ComponentId` is a unique identifier for a component type. Use
 /// `componentId` to generate a `ComponentId` from a type.
@@ -21,60 +22,6 @@ pub fn componentId(comptime T: anytype) ComponentId {
     return hasher.final();
 }
 
-/// `ComponentMeta` contains the metadata for a component type.
-/// This was extracted from `ComponentArray` to enable better archetype management.
-pub const ComponentMeta = struct {
-    id: ComponentId,
-    size: usize,
-    alignment: u29,
-    stride: usize,
-    trait: ?ComponentId,
-
-    pub fn init(id: ComponentId, size: usize, alignment: u29, trait: ?ComponentId) ComponentMeta {
-        const stride = if (size == 0) 0 else std.mem.alignForward(usize, size, alignment);
-        return ComponentMeta{
-            .id = id,
-            .size = size,
-            .alignment = alignment,
-            .stride = stride,
-            .trait = trait,
-        };
-    }
-
-    pub fn from(comptime T: anytype) ComponentMeta {
-        // This can be used with a type or a value.
-        const ComponentT = if (@TypeOf(T) == type) T else @TypeOf(T);
-
-        // check for the __trait__ declaration
-        if (@hasDecl(ComponentT, "__trait__")) {
-            const trait_id = componentId(ComponentT.__trait__);
-            return ComponentMeta.init(
-                componentId(ComponentT),
-                @sizeOf(ComponentT),
-                @alignOf(ComponentT),
-                trait_id,
-            );
-        }
-
-        return ComponentMeta.init(
-            componentId(ComponentT),
-            @sizeOf(ComponentT),
-            @alignOf(ComponentT),
-            null,
-        );
-    }
-
-    pub fn eql(self: ComponentMeta, other: ComponentMeta) bool {
-        return self.id == other.id and
-            self.size == other.size and
-            self.alignment == other.alignment and
-            self.stride == other.stride;
-    }
-
-    pub fn lessThan(self: ComponentMeta, other: ComponentMeta) bool {
-        return self.id < other.id;
-    }
-};
 
 const Self = @This();
 test "Import embedded unit tests" {
