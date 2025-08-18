@@ -12,6 +12,7 @@ const ComponentId = root.ComponentId;
 const componentId = root.componentId;
 const Query = root.Query;
 const GroupBy = root.GroupBy;
+const Transaction = root.Transaction;
 
 allocator: std.mem.Allocator,
 archetypes: std.AutoArrayHashMapUnmanaged(Archetype.Id, Archetype) = .empty,
@@ -33,6 +34,12 @@ pub fn deinit(self: *Database) void {
     }
     self.archetypes.deinit(self.allocator);
     self.entities.deinit(self.allocator);
+}
+
+/// `transaction` begins a new transaction on the database. You should use this
+/// instead of directly modifying the database to ensure atomicity and consistency.
+pub fn transaction(self: *Database) Transaction {
+    return Transaction.init(self.allocator, self);
 }
 
 pub fn getEntity(self: *Database, id: Entity.Id) ?Entity {
@@ -71,11 +78,18 @@ pub fn removeEntity(self: *Database, entity_id: Entity.Id) !void {
     self.pruneIfEmpty(archetype);
 }
 
-pub fn createEntity(self: *Database, components: anytype) !Entity.Id {
+pub fn reserveEntityId(self: *Database) Entity.Id {
     const entity_id = self.next_entity_id;
     self.next_entity_id += 1;
+    return entity_id;
+}
 
-    // Use runtime version of ComponentSet.fromComponents
+pub fn createEntity(self: *Database, components: anytype) !Entity.Id {
+    const entity_id = self.reserveEntityId();
+    return try self.createEntityWithId(entity_id, components);
+}
+
+pub fn createEntityWithId(self: *Database, entity_id: Entity.Id, components: anytype) !Entity.Id {
     var component_set = try ComponentSet.fromComponentsRuntime(self.allocator, components);
     defer component_set.deinit();
 
