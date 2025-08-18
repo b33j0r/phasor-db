@@ -1,3 +1,6 @@
+//! `Archetype` represents a collection of entities that share the same set of components.
+//! It holds the actual column data that entities are stored in.
+
 const std = @import("std");
 const root = @import("root.zig");
 const ComponentId = root.ComponentId;

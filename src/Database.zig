@@ -10,18 +10,21 @@ const ComponentSet = root.ComponentSet;
 const ComponentMeta = root.ComponentMeta;
 const ComponentId = root.ComponentId;
 const componentId = root.componentId;
+const DatabaseEvents = root.DatabaseEvents;
 const Query = root.Query;
 
 allocator: std.mem.Allocator,
 archetypes: std.AutoArrayHashMapUnmanaged(Archetype.Id, Archetype) = .empty,
 entities: std.AutoArrayHashMapUnmanaged(Entity.Id, Entity) = .empty,
 next_entity_id: Entity.Id = 0,
+events: DatabaseEvents,
 
 const Database = @This();
 
 pub fn init(allocator: std.mem.Allocator) Database {
     return Database{
         .allocator = allocator,
+        .events = DatabaseEvents.init(allocator),
     };
 }
 
@@ -32,6 +35,7 @@ pub fn deinit(self: *Database) void {
     }
     self.archetypes.deinit(self.allocator);
     self.entities.deinit(self.allocator);
+    self.events.deinit();
 }
 
 pub fn getEntity(self: *Database, id: Entity.Id) ?Entity {
@@ -81,16 +85,10 @@ pub fn createEntity(self: *Database, components: anytype) !Entity.Id {
     const archetype_id = component_set.calculateId();
 
     // Get or create the archetype for this combination of components
-    var archetype = self.archetypes.getPtr(archetype_id);
-    if (archetype == null) {
-        // Create new archetype from ComponentSet (same as addComponents)
-        const new_archetype = try Archetype.fromComponentSet(self.allocator, &component_set);
-        try self.archetypes.put(self.allocator, archetype_id, new_archetype);
-        archetype = self.archetypes.getPtr(archetype_id);
-    }
+    const archetype = try self.getOrCreateArchetype(archetype_id, &component_set);
 
     // Add the entity to the archetype's entity list and component data
-    const entity_index = try archetype.?.addEntity(entity_id, components);
+    const entity_index = try archetype.addEntity(entity_id, components);
 
     // Create and store the Entity record
     const entity = Entity{
@@ -103,6 +101,34 @@ pub fn createEntity(self: *Database, components: anytype) !Entity.Id {
     try self.entities.put(self.allocator, entity_id, entity);
 
     return entity_id;
+}
+
+/// Creates a new archetype from a ComponentSet and publishes the ArchetypeAdded event.
+fn createArchetype(self: *Database, component_set: *const ComponentSet) !Archetype {
+    const new_archetype = try Archetype.fromComponentSet(self.allocator, component_set);
+    
+    // Publish the ArchetypeAdded event
+    const event_data = DatabaseEvents.ArchetypeAdded{
+        .archetype = &new_archetype,
+    };
+    self.events.archetype_added.publish(&event_data);
+    
+    return new_archetype;
+}
+
+/// Gets an existing archetype or creates a new one if it doesn't exist.
+fn getOrCreateArchetype(self: *Database, archetype_id: Archetype.Id, component_set: *const ComponentSet) !*Archetype {
+    // Check if archetype already exists
+    if (self.archetypes.getPtr(archetype_id)) |existing_archetype| {
+        return existing_archetype;
+    }
+    
+    // Create new archetype using createArchetype
+    const new_archetype = try self.createArchetype(component_set);
+    try self.archetypes.put(self.allocator, archetype_id, new_archetype);
+    
+    // Return pointer to the newly stored archetype
+    return self.archetypes.getPtr(archetype_id).?;
 }
 
 /// Removes an archetype from the database if it has no entities.
@@ -187,13 +213,7 @@ pub fn addComponents(
     }
 
     // Get or create the new archetype
-    var new_archetype = self.archetypes.getPtr(new_archetype_id);
-    if (new_archetype == null) {
-        // Create new archetype from the union set
-        const archetype = try Archetype.fromComponentSet(self.allocator, &union_set);
-        try self.archetypes.put(self.allocator, new_archetype_id, archetype);
-        new_archetype = self.archetypes.getPtr(new_archetype_id);
-    }
+    const new_archetype = try self.getOrCreateArchetype(new_archetype_id, &union_set);
 
     // Move entity data from source archetype to destination archetype
     const src_row_index = entity.row_index;
@@ -202,7 +222,7 @@ pub fn addComponents(
     const src_archetype_fresh = self.archetypes.getPtr(src_archetype_id).?;
     
     // Use the proper abstraction to copy entity between archetypes
-    const new_entity_index = try src_archetype_fresh.copyEntityTo(src_row_index, new_archetype.?);
+    const new_entity_index = try src_archetype_fresh.copyEntityTo(src_row_index, new_archetype);
     
     // Remove entity from source archetype and handle bookkeeping
     _ = try src_archetype_fresh.removeEntityByIndex(src_row_index);
@@ -232,7 +252,7 @@ pub fn addComponents(
         }
 
         // Find the column for this component in the new archetype
-        for (new_archetype.?.columns) |*column| {
+        for (new_archetype.columns) |*column| {
             if (column.meta.id == comp_id) {
                 if (component_exists_in_source) {
                     // Component already exists, update it at the entity's index
@@ -300,13 +320,7 @@ pub fn removeComponents(
     }
 
     // Get or create the new archetype
-    var new_archetype = self.archetypes.getPtr(new_archetype_id);
-    if (new_archetype == null) {
-        // Create new archetype from the difference set
-        const archetype = try Archetype.fromComponentSet(self.allocator, &diff_set);
-        try self.archetypes.put(self.allocator, new_archetype_id, archetype);
-        new_archetype = self.archetypes.getPtr(new_archetype_id);
-    }
+    const new_archetype = try self.getOrCreateArchetype(new_archetype_id, &diff_set);
 
     // Move entity data from source archetype to destination archetype
     const src_row_index = entity.row_index;
@@ -315,7 +329,7 @@ pub fn removeComponents(
     const src_archetype_fresh = self.archetypes.getPtr(src_archetype_id).?;
     
     // Use the proper abstraction to copy entity between archetypes
-    const new_entity_index = try src_archetype_fresh.copyEntityTo(src_row_index, new_archetype.?);
+    const new_entity_index = try src_archetype_fresh.copyEntityTo(src_row_index, new_archetype);
     
     // Remove entity from source archetype and handle bookkeeping
     _ = try src_archetype_fresh.removeEntityByIndex(src_row_index);

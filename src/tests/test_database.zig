@@ -7,6 +7,7 @@ const componentId = root.componentId;
 
 const Archetype = root.Archetype;
 const Database = root.Database;
+const DatabaseEvents = root.DatabaseEvents;
 
 const fixtures = @import("fixtures.zig");
 const Position = fixtures.Position;
@@ -905,4 +906,36 @@ test "Query with traits - ComponentX matches Component1 and Component2" {
 
     try testing.expect(found_component1);
     try testing.expect(found_component2);
+}
+
+test "Database archetype added event" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    var event_count: u32 = 0;
+    const TestSubscriber = struct {
+        count: *u32,
+
+        const Self = @This();
+
+        pub fn onArchetypeAdded(context: *anyopaque, evt: *const DatabaseEvents.ArchetypeAdded) void {
+            const self = @as(*Self, @alignCast(@ptrCast(context)));
+            self.count.* += 1;
+            _ = evt; // Use the event parameter to avoid unused variable warning
+        }
+    };
+
+    var subscriber = TestSubscriber{ .count = &event_count };
+    try db.events.archetype_added.subscribe(&subscriber, TestSubscriber.onArchetypeAdded);
+
+    // Create entities with different component combinations to trigger archetype creation
+    _ = try db.createEntity(.{ Position{ .x = 1.0, .y = 2.0 } });
+    try std.testing.expectEqual(@as(u32, 1), event_count);
+
+    _ = try db.createEntity(.{ Position{ .x = 3.0, .y = 4.0 } }); // Same archetype, no new event
+    try std.testing.expectEqual(@as(u32, 1), event_count);
+
+    _ = try db.createEntity(.{ Position{ .x = 5.0, .y = 6.0 }, Velocity{ .dx = 1.0, .dy = 0.0 } }); // New archetype
+    try std.testing.expectEqual(@as(u32, 2), event_count);
 }
