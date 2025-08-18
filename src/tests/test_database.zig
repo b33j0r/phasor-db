@@ -946,6 +946,9 @@ test "Database groupBy" {
     try testing.expectEqual(1, group1.key);
     try testing.expectEqual(2, group2.key);
 
+    try testing.expectEqual(componentId(Component1), group1.component_id);
+    try testing.expectEqual(componentId(Component2), group2.component_id);
+
     var group1_iterator = group1.iterator();
     var group2_iterator = group2.iterator();
 

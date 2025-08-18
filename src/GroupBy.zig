@@ -3,6 +3,8 @@ const root = @import("root.zig");
 const Database = root.Database;
 const Entity = root.Entity;
 const Archetype = root.Archetype;
+const ComponentId = root.ComponentId;
+const componentId = root.componentId;
 
 allocator: std.mem.Allocator,
 database: *Database,
@@ -23,11 +25,12 @@ pub fn fromTraitType(
 
     // Iterate over all archetypes and group entities by the trait key
     var archetype_iterator = database.archetypes.iterator();
-    const trait_id = root.componentId(TraitT);
+    const trait_id = componentId(TraitT);
     while (archetype_iterator.next()) |entry| {
         const archetype_id = entry.key_ptr.*;
         const archetype = entry.value_ptr.*;
         const trait_column = archetype.getColumn(trait_id) orelse continue;
+        const component_id = trait_column.meta.id;
         const trait = trait_column.meta.trait orelse continue;
         const group_key = switch (trait.kind) {
             .Grouped => |grouped| grouped.group_key,
@@ -48,7 +51,7 @@ pub fn fromTraitType(
 
         // Create a new group if it doesn't exist
         if (group_index == null) {
-            const new_group = Group.init(allocator, group_key, database);
+            const new_group = Group.init(allocator, component_id, group_key, database);
 
             // Add the new group to the dequeue
             try group_by.groups.add(new_group);
@@ -103,13 +106,15 @@ pub const GroupDequeue = std.PriorityDequeue(Group,void, struct {
 
 /// `Group` represents a collection of entities that share the same group key under a trait.
 pub const Group = struct {
+    component_id: ComponentId,
     key: i32,
     allocator: std.mem.Allocator,
     database: *Database,
     archetype_ids: std.ArrayListUnmanaged(Archetype.Id) = .empty,
 
-    pub fn init(allocator: std.mem.Allocator, key: i32, database: *Database) Group {
+    pub fn init(allocator: std.mem.Allocator, component_id: ComponentId, key: i32, database: *Database) Group {
         return Group{
+            .component_id = component_id,
             .key = key,
             .allocator = allocator,
             .database = database,
