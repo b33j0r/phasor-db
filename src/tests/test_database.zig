@@ -938,13 +938,16 @@ test "Database groupBy" {
     try testing.expectEqual(2, groups.count());
 
     var group_iterator = groups.iterator();
-    const group1 = group_iterator.next();
-    const group2 = group_iterator.next();
+    const group1 = group_iterator.next().?;
+    const group2 = group_iterator.next().?;
 
     try testing.expectEqual(null, group_iterator.next());
 
-    var group1_iterator = group1.?.iterator();
-    var group2_iterator = group2.?.iterator();
+    try testing.expectEqual(1, group1.key);
+    try testing.expectEqual(2, group2.key);
+
+    var group1_iterator = group1.iterator();
+    var group2_iterator = group2.iterator();
 
     try testing.expect(group1_iterator.next().?.id == entity1a_id);
     try testing.expect(group1_iterator.next().?.id == entity1b_id);
