@@ -2,14 +2,15 @@
 const std = @import("std");
 
 pub const Archetype = @import("Archetype.zig");
+pub const ComponentArray = @import("ComponentArray.zig");
+pub const ComponentMeta = @import("ComponentMeta.zig");
+pub const ComponentSet = @import("ComponentSet.zig");
 pub const Database = @import("Database.zig");
 pub const Entity = @import("Entity.zig");
-pub const Query = @import("Query.zig");
-pub const ComponentArray = @import("ComponentArray.zig");
-pub const ComponentSet = @import("ComponentSet.zig");
-pub const ComponentMeta = @import("ComponentMeta.zig");
-pub const Trait = @import("Trait.zig");
 pub const GroupBy = @import("GroupBy.zig");
+pub const Query = @import("Query.zig");
+pub const Trait = @import("Trait.zig");
+pub const Transaction = @import("Transaction.zig");
 
 /// `ComponentId` is a unique identifier for a component type. Use
 /// `componentId` to generate a `ComponentId` from a type.
