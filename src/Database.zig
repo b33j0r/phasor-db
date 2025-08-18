@@ -10,21 +10,18 @@ const ComponentSet = root.ComponentSet;
 const ComponentMeta = root.ComponentMeta;
 const ComponentId = root.ComponentId;
 const componentId = root.componentId;
-const DatabaseEvents = root.DatabaseEvents;
 const Query = root.Query;
 
 allocator: std.mem.Allocator,
 archetypes: std.AutoArrayHashMapUnmanaged(Archetype.Id, Archetype) = .empty,
 entities: std.AutoArrayHashMapUnmanaged(Entity.Id, Entity) = .empty,
 next_entity_id: Entity.Id = 0,
-events: DatabaseEvents,
 
 const Database = @This();
 
 pub fn init(allocator: std.mem.Allocator) Database {
     return Database{
         .allocator = allocator,
-        .events = DatabaseEvents.init(allocator),
     };
 }
 
@@ -35,7 +32,6 @@ pub fn deinit(self: *Database) void {
     }
     self.archetypes.deinit(self.allocator);
     self.entities.deinit(self.allocator);
-    self.events.deinit();
 }
 
 pub fn getEntity(self: *Database, id: Entity.Id) ?Entity {
@@ -105,15 +101,7 @@ pub fn createEntity(self: *Database, components: anytype) !Entity.Id {
 
 /// Creates a new archetype from a ComponentSet and publishes the ArchetypeAdded event.
 fn createArchetype(self: *Database, component_set: *const ComponentSet) !Archetype {
-    const new_archetype = try Archetype.fromComponentSet(self.allocator, component_set);
-    
-    // Publish the ArchetypeAdded event
-    const event_data = DatabaseEvents.ArchetypeAdded{
-        .archetype = &new_archetype,
-    };
-    self.events.archetype_added.publish(&event_data);
-    
-    return new_archetype;
+    return try Archetype.fromComponentSet(self.allocator, component_set);
 }
 
 /// Gets an existing archetype or creates a new one if it doesn't exist.
