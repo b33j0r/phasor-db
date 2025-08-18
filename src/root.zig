@@ -23,7 +23,6 @@ pub fn componentId(comptime T: anytype) ComponentId {
     return hasher.final();
 }
 
-
 const Self = @This();
 test "Import embedded unit tests" {
     std.testing.refAllDecls(Self);

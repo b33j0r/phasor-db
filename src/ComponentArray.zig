@@ -18,7 +18,6 @@ pub const min_occupied_capacity = 8;
 
 const ComponentArray = @This();
 
-
 pub fn init(
     allocator: std.mem.Allocator,
     meta: ComponentMeta,
@@ -78,10 +77,10 @@ pub fn set(self: *ComponentArray, index: usize, value: anytype) !void {
     const T = @TypeOf(value);
     if (index >= self.len) return error.IndexOutOfBounds;
     if (@sizeOf(T) != self.meta.size) return error.TypeMismatch;
-    
+
     // For zero-sized components, no memory operation is needed
     if (self.meta.size == 0) return;
-    
+
     const offset = index * self.meta.stride;
     @memcpy(self.data[offset .. offset + self.meta.size], std.mem.asBytes(&value));
 }
@@ -121,10 +120,7 @@ pub fn ensureCapacity(self: *ComponentArray, new_capacity: usize) !void {
 pub fn ensureTotalCapacity(self: *ComponentArray, new_capacity: usize) !void {
     if (self.capacity >= new_capacity) return;
 
-    const better_capacity = @max(
-        self.capacity * 3 / 2,
-        @max(new_capacity, min_occupied_capacity)
-    );
+    const better_capacity = @max(self.capacity * 3 / 2, @max(new_capacity, min_occupied_capacity));
 
     return self.ensureCapacity(better_capacity);
 }
@@ -257,10 +253,7 @@ pub fn copyElementToEnd(
         const src_offset = src_index * self.meta.stride;
         const dest_offset = dest_array.len * dest_array.meta.stride;
 
-        @memcpy(
-            dest_array.data[dest_offset .. dest_offset + self.meta.size],
-            self.data[src_offset .. src_offset + self.meta.size]
-        );
+        @memcpy(dest_array.data[dest_offset .. dest_offset + self.meta.size], self.data[src_offset .. src_offset + self.meta.size]);
     }
 
     dest_array.len += 1;

@@ -86,8 +86,8 @@ test "Database addComponents - mixed update existing and add new" {
 
     // Add Position with different values AND Velocity (mixed case)
     try db.addComponents(entity_id, .{
-        .position = TestPositions.alternative,  // Should UPDATE existing Position
-        .velocity = TestVelocity.moving_right,  // Should ADD new Velocity
+        .position = TestPositions.alternative, // Should UPDATE existing Position
+        .velocity = TestVelocity.moving_right, // Should ADD new Velocity
     });
 
     // Entity should now be in a different archetype with both components
@@ -142,7 +142,7 @@ test "Entity has - different component types" {
     // Test with full entity containing multiple components
     const full_entity_id = try db.createEntity(TestEntity.full_entity);
     const full_entity = db.getEntity(full_entity_id).?;
-    
+
     try testing.expect(full_entity.has(Position));
     try testing.expect(full_entity.has(Health));
     try testing.expect(full_entity.has(Velocity));
@@ -152,7 +152,7 @@ test "Entity has - different component types" {
     // Test with entity containing only Marker (zero-sized component)
     const marker_entity_id = try db.createEntity(.{ .marker = Marker{} });
     const marker_entity = db.getEntity(marker_entity_id).?;
-    
+
     try testing.expect(marker_entity.has(Marker));
     try testing.expect(!marker_entity.has(Position));
     try testing.expect(!marker_entity.has(Health));
@@ -218,7 +218,7 @@ test "Entity set - different component types" {
     try entity.set(TestPositions.origin);
     try entity.set(TestHealth.critical);
     try entity.set(Marker{});
-    
+
     const large_comp = LargeComponent{ .data = [_]u8{1} ** 1024, .id = 999 };
     try entity.set(large_comp);
 
@@ -602,32 +602,29 @@ test "Database query multiple components" {
     defer db.deinit();
 
     // Create entities with different component combinations
-    const entity1_id = try db.createEntity(.{
-        Position{ .x = 1.0, .y = 2.0 },
-        Health{ .current = 100, .max = 100 }
-    });
-    const _entity2_id = try db.createEntity(.{ Position{ .x = 3.0, .y = 4.0 } }); // Only position
-    const _entity3_id = try db.createEntity(.{ Health{ .current = 50, .max = 100 } }); // Only health
+    const entity1_id = try db.createEntity(.{ Position{ .x = 1.0, .y = 2.0 }, Health{ .current = 100, .max = 100 } });
+    const _entity2_id = try db.createEntity(.{Position{ .x = 3.0, .y = 4.0 }}); // Only position
+    const _entity3_id = try db.createEntity(.{Health{ .current = 50, .max = 100 }}); // Only health
     const entity4_id = try db.createEntity(.{ Position{ .x = 5.0, .y = 6.0 }, Health{ .current = 75, .max = 100 } });
-    
+
     _ = _entity2_id; // Intentionally unused - testing that query doesn't return it
     _ = _entity3_id; // Intentionally unused - testing that query doesn't return it
 
     // Query for entities with both Position and Health
     var query_result = try db.query(.{ Position, Health });
     defer query_result.deinit();
-    
+
     // Should find only entities 1 and 4
     try testing.expectEqual(2, query_result.count());
-    
+
     var iter = query_result.iterator();
     var found_entity1 = false;
     var found_entity4 = false;
-    
+
     while (iter.next()) |entity| {
         const pos = entity.get(Position).?;
         const health = entity.get(Health).?;
-        
+
         if (entity.id == entity1_id) {
             found_entity1 = true;
             try testing.expectEqual(@as(f32, 1.0), pos.x);
@@ -642,7 +639,7 @@ test "Database query multiple components" {
             try testing.expect(false); // Should not find entity2 or entity3
         }
     }
-    
+
     try testing.expect(found_entity1);
     try testing.expect(found_entity4);
 }
@@ -836,10 +833,7 @@ test "Query first - multiple components query" {
     _ = try db.createEntity(TestEntity.basic_positioned); // Only Position
     _ = try db.createEntity(.{ .health = TestHealth.full }); // Only Health
     const matching_entity1_id = try db.createEntity(TestEntity.healthy_positioned); // Position + Health
-    const matching_entity2_id = try db.createEntity(.{ 
-        .position = TestPositions.alternative, 
-        .health = TestHealth.damaged 
-    }); // Position + Health
+    const matching_entity2_id = try db.createEntity(.{ .position = TestPositions.alternative, .health = TestHealth.damaged }); // Position + Health
 
     // Query for entities with both Position and Health
     var query = try db.query(.{ Position, Health });
@@ -864,7 +858,7 @@ fn Component(N: i32) type {
     };
 }
 
-const ComponentX = struct{
+const ComponentX = struct {
     n: i32,
 };
 
@@ -877,12 +871,12 @@ test "Query with traits - ComponentX matches Component1 and Component2" {
     defer db.deinit();
 
     // Create entities with Component1 and Component2
-    _ = try db.createEntity(.{ Component1{ } });
-    _ = try db.createEntity(.{ Component2{ } });
+    _ = try db.createEntity(.{Component1{}});
+    _ = try db.createEntity(.{Component2{}});
 
     // The query for ComponentX should match Component1 and Component2
     // since they are both defined with the same __traits__
-    var query = try db.query(.{ ComponentX });
+    var query = try db.query(.{ComponentX});
     defer query.deinit();
 
     try testing.expectEqual(2, query.count());

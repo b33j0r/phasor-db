@@ -110,11 +110,11 @@ fn getOrCreateArchetype(self: *Database, archetype_id: Archetype.Id, component_s
     if (self.archetypes.getPtr(archetype_id)) |existing_archetype| {
         return existing_archetype;
     }
-    
+
     // Create new archetype using createArchetype
     const new_archetype = try self.createArchetype(component_set);
     try self.archetypes.put(self.allocator, archetype_id, new_archetype);
-    
+
     // Return pointer to the newly stored archetype
     return self.archetypes.getPtr(archetype_id).?;
 }
@@ -205,13 +205,13 @@ pub fn addComponents(
 
     // Move entity data from source archetype to destination archetype
     const src_row_index = entity.row_index;
-    
+
     // Get fresh pointer to source archetype after hashmap operations
     const src_archetype_fresh = self.archetypes.getPtr(src_archetype_id).?;
-    
+
     // Use the proper abstraction to copy entity between archetypes
     const new_entity_index = try src_archetype_fresh.copyEntityTo(src_row_index, new_archetype);
-    
+
     // Remove entity from source archetype and handle bookkeeping
     _ = try src_archetype_fresh.removeEntityByIndex(src_row_index);
 
@@ -257,7 +257,7 @@ pub fn addComponents(
     // Note: moveEntityTo() already removed the entity from source archetype and handled bookkeeping
     // Get fresh pointer to source archetype for cleanup check
     const src_archetype_for_cleanup = self.archetypes.getPtr(src_archetype_id).?;
-    
+
     // Clean up source archetype if it's now empty
     self.pruneIfEmpty(src_archetype_for_cleanup);
 
@@ -312,13 +312,13 @@ pub fn removeComponents(
 
     // Move entity data from source archetype to destination archetype
     const src_row_index = entity.row_index;
-    
+
     // Get fresh pointer to source archetype after hashmap operations
     const src_archetype_fresh = self.archetypes.getPtr(src_archetype_id).?;
-    
+
     // Use the proper abstraction to copy entity between archetypes
     const new_entity_index = try src_archetype_fresh.copyEntityTo(src_row_index, new_archetype);
-    
+
     // Remove entity from source archetype and handle bookkeeping
     _ = try src_archetype_fresh.removeEntityByIndex(src_row_index);
 
@@ -332,7 +332,7 @@ pub fn removeComponents(
 
     // Get fresh pointer to source archetype for cleanup check
     const src_archetype_for_cleanup = self.archetypes.getPtr(src_archetype_id).?;
-    
+
     // Clean up source archetype if it's now empty
     self.pruneIfEmpty(src_archetype_for_cleanup);
 
@@ -396,7 +396,7 @@ test query {
     });
 
     // Query for entities with position component
-    var q = try db.query(.{ Position });
+    var q = try db.query(.{Position});
     defer q.deinit();
 
     try std.testing.expectEqual(2, q.count());

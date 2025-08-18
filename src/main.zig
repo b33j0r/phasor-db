@@ -41,7 +41,7 @@ pub fn main() !void {
     try db.addComponents(entity, .{Player{}});
 
     // Query all entities with Position and Velocity components
-    var query = try db.query(.{Position, Velocity});
+    var query = try db.query(.{ Position, Velocity });
     defer query.deinit();
 
     var iterator = query.iterator();
@@ -56,5 +56,4 @@ pub fn main() !void {
         std.debug.print("Queried Entity Position: ({}, {})\n", .{ pos.x, pos.y });
         std.debug.print("Queried Entity Velocity: ({}, {})\n", .{ vel.x, vel.y });
     }
-
 }

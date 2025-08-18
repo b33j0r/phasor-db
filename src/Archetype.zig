@@ -169,7 +169,6 @@ pub fn idFromType(comptime TupleT: type) Id {
     return hasher.final();
 }
 
-
 pub fn calculateId(comptime components: anytype) Id {
     const sorted_ids = comptime getSortedComponentIds(components);
 

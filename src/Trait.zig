@@ -22,7 +22,7 @@ pub const Kind = enum {
 
 pub fn maybeFrom(comptime ComponentT: anytype) ?Trait {
     // check for the __trait__ declaration
-    if (!@hasDecl(ComponentT, "__trait__")){
+    if (!@hasDecl(ComponentT, "__trait__")) {
         return null;
     }
 
@@ -39,7 +39,8 @@ pub fn maybeFrom(comptime ComponentT: anytype) ?Trait {
 
             // If it's a struct with the same layout as the component, it's identical layout
             if (@sizeOf(TraitT) == @sizeOf(ComponentT) and
-                @alignOf(TraitT) == @alignOf(ComponentT)) {
+                @alignOf(TraitT) == @alignOf(ComponentT))
+            {
                 verifyIdenticalLayout(TraitT, ComponentT);
                 break :blk Trait.Kind.IdenticalLayout;
             } else {
@@ -89,7 +90,7 @@ fn verifyIdenticalLayout(comptime TraitT: type, comptime ComponentT: type) void 
         },
         else => {
             @compileError("Unsupported type for layout verification: " ++ @typeName(TraitT));
-        }
+        },
     }
 }
 

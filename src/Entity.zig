@@ -21,7 +21,7 @@ pub fn get(self: *const Entity, comptime T: type) ?*T {
 
 pub fn has(self: *const Entity, comptime T: type) bool {
     const archetype = self.database.archetypes.get(self.archetype_id) orelse return false;
-    return archetype.hasComponents(&.{ componentId(T) });
+    return archetype.hasComponents(&.{componentId(T)});
 }
 
 pub fn set(self: *Entity, value: anytype) !void {
