@@ -13,7 +13,7 @@ has_executed: bool = false,
 const Transaction = @This();
 
 const Command = struct {
-    context: *anyopaque, // TODO: not sure this is the simplest way. the problem is that we need to capture the comptime components specs
+    context: *anyopaque,
     execute: *const fn (ctx: *anyopaque, db: *Database) anyerror!void,
     cleanup: *const fn (ctx: *anyopaque, allocator: std.mem.Allocator) void,
 };
