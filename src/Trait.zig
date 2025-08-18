@@ -15,9 +15,12 @@ kind: Kind,
 
 const Trait = @This();
 
-pub const Kind = enum {
+pub const Kind = union(enum) {
     Marker,
     IdenticalLayout,
+    Grouped: struct {
+        group_key: i32,
+    }
 };
 
 pub fn maybeFrom(comptime ComponentT: anytype) ?Trait {
@@ -32,6 +35,12 @@ pub fn maybeFrom(comptime ComponentT: anytype) ?Trait {
     // Determine the trait kind based on the trait type
     const trait_kind = switch (@typeInfo(TraitT)) {
         .@"struct" => blk: {
+            if (@hasDecl(ComponentT, "__group_key__")) {
+                break :blk Trait.Kind{ .Grouped = .{
+                    .group_key = ComponentT.__group_key__,
+                }};
+            }
+
             // If it's a zero-sized struct, it's a marker trait
             if (@sizeOf(TraitT) == 0) {
                 break :blk Trait.Kind.Marker;
@@ -40,12 +49,12 @@ pub fn maybeFrom(comptime ComponentT: anytype) ?Trait {
             // If it's a struct with the same layout as the component, it's identical layout
             if (@sizeOf(TraitT) == @sizeOf(ComponentT) and
                 @alignOf(TraitT) == @alignOf(ComponentT))
-            {
-                verifyIdenticalLayout(TraitT, ComponentT);
-                break :blk Trait.Kind.IdenticalLayout;
-            } else {
-                @compileError("Trait struct layout does not match component layout");
-            }
+                {
+                    verifyIdenticalLayout(TraitT, ComponentT);
+                    break :blk Trait.Kind.IdenticalLayout;
+                } else {
+                    @compileError("Trait struct layout does not match component layout");
+                }
         },
         else => @compileError("Trait must be a struct"),
     };

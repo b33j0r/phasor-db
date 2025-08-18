@@ -9,6 +9,7 @@ pub const ComponentArray = @import("ComponentArray.zig");
 pub const ComponentSet = @import("ComponentSet.zig");
 pub const ComponentMeta = @import("ComponentMeta.zig");
 pub const Trait = @import("Trait.zig");
+pub const GroupBy = @import("GroupBy.zig");
 
 /// `ComponentId` is a unique identifier for a component type. Use
 /// `componentId` to generate a `ComponentId` from a type.

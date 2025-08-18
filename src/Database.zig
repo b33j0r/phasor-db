@@ -11,6 +11,7 @@ const ComponentMeta = root.ComponentMeta;
 const ComponentId = root.ComponentId;
 const componentId = root.componentId;
 const Query = root.Query;
+const GroupBy = root.GroupBy;
 
 allocator: std.mem.Allocator,
 archetypes: std.AutoArrayHashMapUnmanaged(Archetype.Id, Archetype) = .empty,
@@ -406,4 +407,9 @@ test query {
     while (it.next()) |entity| {
         std.log.debug("Found entity: {}\n", .{entity.id});
     }
+}
+
+/// Queries the database for groups within a trait
+pub fn groupBy(self: *Database, TraitT: type) !GroupBy {
+    return GroupBy.fromTraitType(self.allocator, self, TraitT);
 }

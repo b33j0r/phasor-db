@@ -851,18 +851,21 @@ test "Query first - multiple components query" {
     try testing.expect(first_entity.?.get(Health) != null);
 }
 
-fn Component(N: i32) type {
-    return struct {
-        n: i32 = N,
-        pub const __trait__ = ComponentX;
-    };
-}
-
-const ComponentX = struct {
-    n: i32,
-};
-
 test "Query with traits - ComponentX matches Component1 and Component2" {
+    const ComponentTypeFactory = struct {
+        pub fn Component(N: i32) type {
+            return struct {
+                n: i32 = N,
+                pub const __trait__ = ComponentX;
+            };
+        }
+
+        pub const ComponentX = struct {
+            n: i32,
+        };
+    };
+    const Component = ComponentTypeFactory.Component;
+    const ComponentX = ComponentTypeFactory.ComponentX;
     const Component1 = Component(1);
     const Component2 = Component(2);
 
@@ -900,4 +903,53 @@ test "Query with traits - ComponentX matches Component1 and Component2" {
 
     try testing.expect(found_component1);
     try testing.expect(found_component2);
+}
+
+test "Database groupBy" {
+    const ComponentTypeFactory = struct {
+        pub fn Component(N: i32) type {
+            return struct {
+                pub const __group_key__ = N;
+                pub const __trait__ = ComponentN;
+            };
+        }
+
+        pub const ComponentN = struct {};
+    };
+    const Component = ComponentTypeFactory.Component;
+    const ComponentN = ComponentTypeFactory.ComponentN;
+
+    const Component1 = Component(1);
+    const Component2 = Component(2);
+
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create entities with different components
+    const entity1a_id = try db.createEntity(.{Component1{}});
+    const entity1b_id = try db.createEntity(.{Component1{}});
+    const entity2a_id = try db.createEntity(.{Component2{}});
+
+    // Group by ComponentN
+    var groups = try db.groupBy(ComponentN);
+    defer groups.deinit();
+
+    try testing.expectEqual(2, groups.count());
+
+    var group_iterator = groups.iterator();
+    const group1 = group_iterator.next();
+    const group2 = group_iterator.next();
+
+    try testing.expectEqual(null, group_iterator.next());
+
+    var group1_iterator = group1.?.iterator();
+    var group2_iterator = group2.?.iterator();
+
+    try testing.expect(group1_iterator.next().?.id == entity1a_id);
+    try testing.expect(group1_iterator.next().?.id == entity1b_id);
+    try testing.expectEqual(null, group1_iterator.next());
+
+    try testing.expect(group2_iterator.next().?.id == entity2a_id);
+    try testing.expectEqual(null, group2_iterator.next());
 }

@@ -286,3 +286,4 @@ pub fn copyEntityTo(
 
     return new_entity_index;
 }
+
