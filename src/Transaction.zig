@@ -27,9 +27,11 @@ pub fn init(allocator: std.mem.Allocator, database: *Database) Transaction {
 }
 
 pub fn deinit(self: *Transaction) void {
-    // Clean up any remaining command contexts
-    for (self.commands.items) |command| {
-        command.cleanup(command.context, self.allocator);
+    // Only clean up remaining command contexts if execute() hasn't been called
+    if (!self.has_executed) {
+        for (self.commands.items) |command| {
+            command.cleanup(command.context, self.allocator);
+        }
     }
     self.commands.deinit(self.allocator);
 }
