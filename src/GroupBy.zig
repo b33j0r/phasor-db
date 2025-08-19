@@ -8,7 +8,7 @@ const componentId = root.componentId;
 
 allocator: std.mem.Allocator,
 database: *Database,
-groups: GroupDequeue,
+groups: std.ArrayListUnmanaged(Group),
 
 const GroupBy = @This();
 
@@ -20,7 +20,7 @@ pub fn fromTraitType(
     var group_by = GroupBy{
         .allocator = allocator,
         .database = database,
-        .groups = GroupDequeue.init(allocator, {}),
+        .groups = .empty,
     };
 
     // Iterate over all archetypes and group entities by the trait key
@@ -37,72 +37,53 @@ pub fn fromTraitType(
             else => continue, // Only handle Grouped traits
         };
 
-        // Create or find the group for this key
-        var group_index: ?usize = null;
-
-        // Check if the group already exists in the dequeue
-        const used = group_by.groups.items[0..group_by.groups.len];
-        for (used, 0..) |g, i| {
-            if (g.key == group_key) {
-                group_index = i;
+        // Find or create the group for this key
+        var found_group: ?*Group = null;
+        for (group_by.groups.items) |*group| {
+            if (group.key == group_key) {
+                found_group = group;
                 break;
             }
         }
 
         // Create a new group if it doesn't exist
-        if (group_index == null) {
+        if (found_group == null) {
             const new_group = Group.init(allocator, component_id, group_key, database);
-
-            // Add the new group to the dequeue
-            try group_by.groups.add(new_group);
-
-            // Since PriorityDequeue reorders, we must find the index by key again
-            const used_after = group_by.groups.items[0..group_by.groups.len];
-            for (used_after, 0..) |g, i| {
-                if (g.key == group_key) {
-                    group_index = i;
-                    break;
-                }
-            }
-            // Should always find it
-            std.debug.assert(group_index != null);
+            try group_by.groups.append(allocator, new_group);
+            found_group = &group_by.groups.items[group_by.groups.items.len - 1];
         }
 
         // Add the archetype to the group
-        var group = &group_by.groups.items[group_index.?];
-        try group.addArchetypeId(archetype_id);
+        try found_group.?.addArchetypeId(archetype_id);
     }
+
+    // Sort groups by key for consistent ordering
+    std.mem.sort(Group, group_by.groups.items, {}, struct {
+        fn lessThan(_: void, a: Group, b: Group) bool {
+            return a.key < b.key;
+        }
+    }.lessThan);
 
     return group_by;
 }
 
 pub fn deinit(self: *GroupBy) void {
-    // Deinitialize each group - only over the used range
-    const used = self.groups.items[0..self.groups.len];
-    for (used) |*group| {
+    for (self.groups.items) |*group| {
         group.deinit();
     }
-    self.groups.deinit();
+    self.groups.deinit(self.allocator);
 }
 
 pub fn count(self: *const GroupBy) usize {
-    return self.groups.count();
+    return self.groups.items.len;
 }
 
 pub fn iterator(self: *const GroupBy) GroupIterator {
     return GroupIterator{
-        .groups = &self.groups,
+        .groups = self.groups.items,
         .current_index = 0,
     };
 }
-
-pub const GroupDequeue = std.PriorityDequeue(Group,void, struct {
-    pub fn compareFn(_: void, a: Group, b: Group) std.math.Order {
-        if (a.key < b.key) return .lt;
-        if (a.key > b.key) return .gt;
-        return .eq;
-    }
-}.compareFn);
 
 /// `Group` represents a collection of entities that share the same group key under a trait.
 pub const Group = struct {
@@ -141,13 +122,12 @@ pub const Group = struct {
 
 /// `GroupIterator` is used to iterate over groups in the result.
 pub const GroupIterator = struct {
-    groups: *const GroupDequeue,
-    current_index: usize = 0,
+    groups: []const Group,
+    current_index: usize,
 
-    pub fn next(self: *GroupIterator) ?*Group {
-        // Only iterate within the used range (len), not full capacity.
+    pub fn next(self: *GroupIterator) ?*const Group {
         if (self.current_index >= self.groups.len) return null;
-        const group = &self.groups.items[self.current_index];
+        const group = &self.groups[self.current_index];
         self.current_index += 1;
         return group;
     }
