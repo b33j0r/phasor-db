@@ -74,11 +74,11 @@ pub fn hasResource(self: *Transaction, comptime T: type) bool {
 }
 
 pub fn insertResource(self: *Transaction, resource: anytype) !void {
-    self.database.insertResource(resource);
+    try self.database.insertResource(resource);
 }
 
-pub fn removeResource(self: *Transaction, comptime T: type) !void {
-    self.database.removeResource(T);
+pub fn removeResource(self: *Transaction, comptime T: type) bool {
+    return self.database.removeResource(T);
 }
 
 //
