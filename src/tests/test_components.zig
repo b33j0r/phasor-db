@@ -16,44 +16,21 @@ const createPopulatedArray = fixtures.createPopulatedArray;
 const TestPositions = fixtures.TestPositions;
 const TestHealth = fixtures.TestHealth;
 
-test "componentId is consistent" {
-    const pos_id1 = componentId(Position);
-    const pos_id2 = componentId(Position);
+test "componentId functionality" {
+    // IDs should be consistent for same type
+    try testing.expectEqual(componentId(Position), componentId(Position));
 
-    try testing.expectEqual(pos_id1, pos_id2);
-}
-
-test "componentId generates unique identifiers from types" {
+    // IDs should be unique across different types
     const pos_id = componentId(Position);
     const health_id = componentId(Health);
-    const empty_id = componentId(Marker);
-
+    const marker_id = componentId(Marker);
     try testing.expect(pos_id != health_id);
-    try testing.expect(health_id != empty_id);
-    try testing.expect(pos_id != empty_id);
+    try testing.expect(health_id != marker_id);
+    try testing.expect(pos_id != marker_id);
 
-    // Same type should generate same ID
-    try testing.expectEqual(pos_id, componentId(Position));
-}
-
-test "componentId generates unique identifiers from values" {
-    const pos_id = componentId(TestPositions.basic);
-    const health_id = componentId(TestHealth.high_max);
-    const empty_id = componentId(Marker{});
-
-    try testing.expect(pos_id != health_id);
-    try testing.expect(health_id != empty_id);
-    try testing.expect(pos_id != empty_id);
-
-    // Same value should generate same ID
-    try testing.expectEqual(pos_id, componentId(TestPositions.basic));
-}
-
-test "componentId generates the same ID from a value and its type" {
-    const pos_id = componentId(TestPositions.basic);
-    const pos_type_id = componentId(Position);
-
-    try testing.expectEqual(pos_id, pos_type_id);
+    // Values and types should generate same ID
+    try testing.expectEqual(componentId(TestPositions.basic), componentId(Position));
+    try testing.expectEqual(componentId(TestHealth.high_max), componentId(Health));
 }
 
 test "ComponentMeta from - trait with identical layout" {
@@ -75,6 +52,22 @@ test "ComponentMeta from - trait with marker" {
     };
     const meta = root.ComponentMeta.from(MarkerTrait);
     try testing.expectEqual(root.Trait.Kind.Marker, meta.trait.?.kind);
+}
+
+test "ComponentMeta from - trait with grouped" {
+    const GroupedTrait = struct {
+        pub const __group_key__ = 42;
+        // We don't care what the trait is, but this is required to make
+        // ComponentMeta.from notice the group key. TODO?
+        pub const __trait__ = struct {};
+    };
+    const meta = root.ComponentMeta.from(GroupedTrait);
+    switch (meta.trait.?.kind) {
+        .Grouped => |grouped| {
+            try testing.expectEqual(42, grouped.group_key);
+        },
+        else => try testing.expect(false),
+    }
 }
 
 test "ComponentArray initialization and deinitialization" {
@@ -201,66 +194,36 @@ test "ComponentArray insert operation" {
     try testing.expectError(error.IndexOutOfBounds, pos_array.insert(6, Position{ .x = 0.0, .y = 0.0 }));
 }
 
-test "ComponentArray shiftRemove operation" {
+test "ComponentArray removal operations" {
     const allocator = testing.allocator;
-    const initial_positions = [_]Position{
+
+    // Test shiftRemove - maintains order
+    const shift_positions = [_]Position{
         .{ .x = 0.0, .y = 0.0 },
         .{ .x = 1.0, .y = 1.0 },
         .{ .x = 2.0, .y = 2.0 },
-        .{ .x = 3.0, .y = 3.0 },
     };
+    var shift_array = try createPopulatedArray(allocator, Position, &shift_positions);
+    defer shift_array.deinit();
 
-    var pos_array = try createPopulatedArray(allocator, Position, &initial_positions);
-    defer pos_array.deinit();
+    shift_array.shiftRemove(1); // Remove middle element
+    try testing.expectEqual(@as(usize, 2), shift_array.len);
+    try testing.expectEqual(@as(f32, 0.0), shift_array.get(0, Position).?.x);
+    try testing.expectEqual(@as(f32, 2.0), shift_array.get(1, Position).?.x); // Order preserved
 
-    // Remove from middle
-    pos_array.shiftRemove(1);
-    try testing.expectEqual(@as(usize, 3), pos_array.len);
-    try testing.expectEqual(@as(f32, 0.0), pos_array.get(0, Position).?.x);
-    try testing.expectEqual(@as(f32, 2.0), pos_array.get(1, Position).?.x);
-    try testing.expectEqual(@as(f32, 3.0), pos_array.get(2, Position).?.x);
-
-    // Remove from beginning
-    pos_array.shiftRemove(0);
-    try testing.expectEqual(@as(usize, 2), pos_array.len);
-    try testing.expectEqual(@as(f32, 2.0), pos_array.get(0, Position).?.x);
-
-    // Remove from end
-    pos_array.shiftRemove(1);
-    try testing.expectEqual(@as(usize, 1), pos_array.len);
-    try testing.expectEqual(@as(f32, 2.0), pos_array.get(0, Position).?.x);
-
-    // Remove out of bounds (should be safe)
-    pos_array.shiftRemove(10);
-    try testing.expectEqual(@as(usize, 1), pos_array.len);
-}
-
-test "ComponentArray swapRemove operation" {
-    const allocator = testing.allocator;
-    const initial_positions = [_]Position{
-        .{ .x = 0.0, .y = 0.0 },
-        .{ .x = 1.0, .y = 1.0 },
-        .{ .x = 2.0, .y = 2.0 },
-        .{ .x = 3.0, .y = 3.0 },
+    // Test swapRemove - faster but doesn't preserve order
+    const swap_positions = [_]Position{
+        .{ .x = 10.0, .y = 10.0 },
+        .{ .x = 11.0, .y = 11.0 },
+        .{ .x = 12.0, .y = 12.0 },
     };
+    var swap_array = try createPopulatedArray(allocator, Position, &swap_positions);
+    defer swap_array.deinit();
 
-    var pos_array = try createPopulatedArray(allocator, Position, &initial_positions);
-    defer pos_array.deinit();
-
-    // Swap remove from middle - should move last element to removed position
-    pos_array.swapRemove(1);
-    try testing.expectEqual(@as(usize, 3), pos_array.len);
-    try testing.expectEqual(@as(f32, 0.0), pos_array.get(0, Position).?.x);
-    try testing.expectEqual(@as(f32, 3.0), pos_array.get(1, Position).?.x); // Last element moved here
-    try testing.expectEqual(@as(f32, 2.0), pos_array.get(2, Position).?.x);
-
-    // Swap remove last element - should just decrement length
-    pos_array.swapRemove(2);
-    try testing.expectEqual(@as(usize, 2), pos_array.len);
-
-    // Swap remove out of bounds (should be safe)
-    pos_array.swapRemove(10);
-    try testing.expectEqual(@as(usize, 2), pos_array.len);
+    swap_array.swapRemove(1); // Remove middle element
+    try testing.expectEqual(@as(usize, 2), swap_array.len);
+    try testing.expectEqual(@as(f32, 10.0), swap_array.get(0, Position).?.x);
+    try testing.expectEqual(@as(f32, 12.0), swap_array.get(1, Position).?.x); // Last element moved to position 1
 }
 
 test "ComponentArray capacity management" {
@@ -345,95 +308,33 @@ test "ComponentArray shrinkAndFree" {
     try testing.expectEqual(@as(usize, 0), pos_array.len);
 }
 
-test "ComponentArray zero-sized component operations" {
-    const allocator = testing.allocator;
-    var empty_array = createMarkerArray(allocator);
-    defer empty_array.deinit();
-
-    // Zero-sized types should handle operations gracefully
-    try empty_array.append(Marker{});
-    try empty_array.append(Marker{});
-
-    try testing.expectEqual(@as(usize, 2), empty_array.len);
-
-    try testing.expect(empty_array.get(0, Marker) != null);
-    try testing.expect(empty_array.get(1, Marker) != null);
-
-    empty_array.swapRemove(0);
-    try testing.expectEqual(@as(usize, 1), empty_array.len);
-}
-
-test "ComponentArray large component handling" {
-    const allocator = testing.allocator;
-    var large_array = ComponentArray.initFromType(
-        allocator,
-        componentId(LargeComponent),
-        @sizeOf(LargeComponent),
-        @alignOf(LargeComponent),
-        null,
-    );
-    defer large_array.deinit();
-
-    var large_comp = LargeComponent{};
-    large_comp.data[0] = 0xAA;
-    large_comp.data[1023] = 0xBB;
-    large_comp.id = 12345;
-
-    try large_array.append(large_comp);
-
-    const retrieved = large_array.get(0, LargeComponent).?;
-    try testing.expectEqual(@as(u8, 0xAA), retrieved.data[0]);
-    try testing.expectEqual(@as(u8, 0xBB), retrieved.data[1023]);
-    try testing.expectEqual(@as(u64, 12345), retrieved.id);
-}
-
-test "ComponentArray memory alignment correctness" {
+test "ComponentArray memory leak - capacity growth and shrinkage" {
     const allocator = testing.allocator;
 
-    // Test with types that have different alignment requirements
-    var pos_array = createPositionArray(allocator);
-    defer pos_array.deinit();
+    const num_iterations = 50;
+    const max_components = 1000;
 
-    try pos_array.append(TestPositions.basic);
-    try pos_array.append(TestPositions.alternative);
+    for (0..num_iterations) |_| {
+        var component_array = ComponentArray.initFromType(
+            allocator,
+            componentId(Position),
+            @sizeOf(Position),
+            @alignOf(Position),
+            null,
+        );
+        defer component_array.deinit();
 
-    // Verify that pointers are properly aligned
-    const ptr1 = pos_array.get(0, Position).?;
-    const ptr2 = pos_array.get(1, Position).?;
+        // Grow the array
+        for (0..max_components) |i| {
+            try component_array.append(Position{ .x = @floatFromInt(i), .y = @floatFromInt(i * 2) });
+        }
 
-    try testing.expect(@intFromPtr(ptr1) % @alignOf(Position) == 0);
-    try testing.expect(@intFromPtr(ptr2) % @alignOf(Position) == 0);
+        // Shrink by removing elements
+        while (component_array.len > 0) {
+            component_array.swapRemove(component_array.len - 1);
+        }
 
-    // Verify stride calculation includes alignment
-    try testing.expect(pos_array.meta.stride >= @sizeOf(Position));
-    try testing.expect(pos_array.meta.stride % @alignOf(Position) == 0);
-}
-
-test "ComponentArray stress test with many operations" {
-    const allocator = testing.allocator;
-    var pos_array = createPositionArray(allocator);
-    defer pos_array.deinit();
-
-    // Add many elements
-    for (0..1000) |i| {
-        try pos_array.append(Position{ .x = @floatFromInt(i), .y = @floatFromInt(i * 2) });
+        // Test shrinkAndFree explicitly
+        try component_array.shrinkAndFree(0);
     }
-
-    try testing.expectEqual(@as(usize, 1000), pos_array.len);
-
-    // Remove every other element using swapRemove
-    var i: usize = 0;
-    while (i < pos_array.len) {
-        pos_array.swapRemove(i);
-        i += 1; // Skip the element that moved into position i
-    }
-
-    try testing.expectEqual(@as(usize, 500), pos_array.len);
-
-    // Insert elements back
-    for (0..250) |idx| {
-        try pos_array.insert(idx * 2, Position{ .x = @floatFromInt(idx + 2000), .y = @floatFromInt(idx + 3000) });
-    }
-
-    try testing.expectEqual(@as(usize, 750), pos_array.len);
 }

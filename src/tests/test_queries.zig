@@ -14,108 +14,37 @@ const Position = fixtures.Position;
 const Health = fixtures.Health;
 const Velocity = fixtures.Velocity;
 
-test "Query first - no matching entities" {
+test "Query first functionality" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();
 
-    // Create some entities without Position component
-    _ = try db.createEntity(.{ .health = TestHealth.full });
-    _ = try db.createEntity(.{ .velocity = TestVelocity.moving_right });
-
-    // Query for entities with Position (none exist)
-    var query = try db.query(.{Position});
-    defer query.deinit();
-
-    // first() should return null when no entities match
-    const first_entity = query.first();
-    try testing.expectEqual(@as(?root.Entity, null), first_entity);
-}
-
-test "Query first - one matching entity" {
-    const allocator = std.testing.allocator;
-    var db = Database.init(allocator);
-    defer db.deinit();
-
-    // Create entities with different components
-    _ = try db.createEntity(.{ .health = TestHealth.full }); // No Position
-    const positioned_entity_id = try db.createEntity(TestEntity.basic_positioned);
-    _ = try db.createEntity(.{ .velocity = TestVelocity.moving_right }); // No Position
-
-    // Query for entities with Position (only one exists)
-    var query = try db.query(.{Position});
-    defer query.deinit();
-
-    // first() should return the only matching entity
-    const first_entity = query.first();
-    try testing.expect(first_entity != null);
-    try testing.expectEqual(positioned_entity_id, first_entity.?.id);
-
-    // Verify the entity has the expected Position component
-    const pos = first_entity.?.get(Position);
-    try testing.expect(pos != null);
-    try testing.expectEqual(TestPositions.basic.x, pos.?.x);
-    try testing.expectEqual(TestPositions.basic.y, pos.?.y);
-}
-
-test "Query first - multiple matching entities" {
-    const allocator = std.testing.allocator;
-    var db = Database.init(allocator);
-    defer db.deinit();
-
-    // Create multiple entities with Position component
-    const entity1_id = try db.createEntity(.{ .position = TestPositions.basic });
-    const entity2_id = try db.createEntity(.{ .position = TestPositions.alternative });
-    const entity3_id = try db.createEntity(.{ .position = TestPositions.third });
-
-    // Query for entities with Position (all three match)
-    var query = try db.query(.{Position});
-    defer query.deinit();
-
-    // first() should return the first entity that matches
-    const first_entity = query.first();
-    try testing.expect(first_entity != null);
-
-    // The first entity should be one of the created entities
-    // (the exact order depends on internal implementation)
-    const first_id = first_entity.?.id;
-    try testing.expect(first_id == entity1_id or first_id == entity2_id or first_id == entity3_id);
-
-    // Verify the entity has a Position component
-    const pos = first_entity.?.get(Position);
-    try testing.expect(pos != null);
-
-    // Verify consistency: calling first() multiple times should return the same entity
-    const second_call = query.first();
-    try testing.expect(second_call != null);
-    try testing.expectEqual(first_id, second_call.?.id);
-}
-
-test "Query first - multiple components query" {
-    const allocator = std.testing.allocator;
-    var db = Database.init(allocator);
-    defer db.deinit();
+    // Test no matching entities - should return null
+    var empty_query = try db.query(.{Position});
+    defer empty_query.deinit();
+    try testing.expectEqual(@as(?root.Entity, null), empty_query.first());
 
     // Create entities with different component combinations
-    _ = try db.createEntity(TestEntity.basic_positioned); // Only Position
     _ = try db.createEntity(.{ .health = TestHealth.full }); // Only Health
-    const matching_entity1_id = try db.createEntity(TestEntity.healthy_positioned); // Position + Health
-    const matching_entity2_id = try db.createEntity(.{ .position = TestPositions.alternative, .health = TestHealth.damaged }); // Position + Health
+    const positioned_id = try db.createEntity(TestEntity.basic_positioned); // Position only
+    const combo_id = try db.createEntity(TestEntity.healthy_positioned); // Position + Health
 
-    // Query for entities with both Position and Health
-    var query = try db.query(.{ Position, Health });
-    defer query.deinit();
+    // Test single component query - should find positioned entities
+    var pos_query = try db.query(.{Position});
+    defer pos_query.deinit();
+    const first_pos = pos_query.first();
+    try testing.expect(first_pos != null);
+    try testing.expect(first_pos.?.id == positioned_id or first_pos.?.id == combo_id);
+    try testing.expect(first_pos.?.has(Position));
 
-    // first() should return one of the matching entities
-    const first_entity = query.first();
-    try testing.expect(first_entity != null);
-
-    const first_id = first_entity.?.id;
-    try testing.expect(first_id == matching_entity1_id or first_id == matching_entity2_id);
-
-    // Verify the entity has both components
-    try testing.expect(first_entity.?.get(Position) != null);
-    try testing.expect(first_entity.?.get(Health) != null);
+    // Test multi-component query - should only find entities with both
+    var combo_query = try db.query(.{ Position, Health });
+    defer combo_query.deinit();
+    const first_combo = combo_query.first();
+    try testing.expect(first_combo != null);
+    try testing.expectEqual(combo_id, first_combo.?.id);
+    try testing.expect(first_combo.?.has(Position));
+    try testing.expect(first_combo.?.has(Health));
 }
 
 test "Query with traits - ComponentX matches Component1 and Component2" {

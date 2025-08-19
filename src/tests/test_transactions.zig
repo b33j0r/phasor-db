@@ -234,3 +234,37 @@ test "Transaction - double execute should fail" {
     const result = txn.execute();
     try testing.expectError(error.TransactionAlreadyExecuted, result);
 }
+
+test "Transaction memory leak - deferred command cleanup" {
+    const allocator = testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    const num_transactions = 100;
+    const commands_per_transaction = 20;
+
+    for (0..num_transactions) |_| {
+        // Test 1: Transactions that are executed
+        {
+            var tx = db.transaction();
+            defer tx.deinit();
+
+            for (0..commands_per_transaction) |i| {
+                _ = try tx.createEntity(.{ .position = Position{ .x = @floatFromInt(i), .y = 0.0 } });
+            }
+
+            try tx.execute();
+        }
+
+        // Test 2: Transactions that are NOT executed (should clean up contexts)
+        {
+            var tx = db.transaction();
+            defer tx.deinit();
+
+            for (0..commands_per_transaction) |i| {
+                _ = try tx.createEntity(.{ .health = Health{ .current = @intCast(i), .max = 100 } });
+            }
+            // NOT calling tx.execute() - contexts should be cleaned up in deinit()
+        }
+    }
+}

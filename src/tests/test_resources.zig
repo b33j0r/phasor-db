@@ -305,3 +305,43 @@ test "ResourceManager memory cleanup on replace" {
     
     // Memory should have been properly cleaned up (verified by allocator)
 }
+
+// Test components for resource memory stress testing
+const GameState = struct {
+    score: u32,
+    level: u8,
+    time_remaining: f32,
+};
+
+const ResourcePlayerStats = struct {
+    experience: u64,
+    gold: u32,
+    inventory: [16]u32, // Larger struct to stress memory allocation
+};
+
+test "Resource management memory leak" {
+    const allocator = testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    const num_cycles = 100;
+
+    for (0..num_cycles) |cycle| {
+        // Insert resources
+        try db.insertResource(GameState{ .score = @intCast(cycle * 100), .level = @intCast(cycle % 10 + 1), .time_remaining = 60.0 });
+
+        try db.insertResource(ResourcePlayerStats{ .experience = cycle * 1000, .gold = @intCast(cycle * 50), .inventory = [_]u32{0} ** 16 });
+
+        // Access resources
+        const game_state = db.getResource(GameState);
+        try testing.expect(game_state != null);
+        try testing.expectEqual(@as(u32, @intCast(cycle * 100)), game_state.?.score);
+
+        // Remove resources
+        _ = db.removeResource(GameState);
+        _ = db.removeResource(ResourcePlayerStats);
+
+        try testing.expect(!db.hasResource(GameState));
+        try testing.expect(!db.hasResource(ResourcePlayerStats));
+    }
+}

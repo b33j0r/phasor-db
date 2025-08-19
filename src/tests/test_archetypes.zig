@@ -123,3 +123,58 @@ test "Archetype removeEntityByIndex" {
     try testing.expectEqual(1, archetype.entity_ids.items.len);
     try testing.expectEqual(20, archetype.entity_ids.items[0]);
 }
+
+test "Archetype transition memory leak - component add/remove cycles" {
+    const allocator = testing.allocator;
+    const Database = @import("../Database.zig");
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    const num_entities = 50;
+    const num_transitions = 20;
+
+    // Create entities with basic components
+    var entities = std.ArrayListUnmanaged(u64).empty;
+    defer entities.deinit(allocator);
+
+    for (0..num_entities) |i| {
+        const entity_id = try db.createEntity(.{Position{ .x = @floatFromInt(i), .y = 0.0 }});
+        try entities.append(allocator, entity_id);
+    }
+
+    // Perform many archetype transitions
+    for (0..num_transitions) |_| {
+        // Add Health component to all entities (Position -> Position+Health archetype)
+        for (entities.items) |entity_id| {
+            try db.addComponents(entity_id, .{Health{ .current = 100, .max = 100 }});
+        }
+
+        // Add Velocity component (Position+Health -> Position+Health+Velocity archetype)
+        for (entities.items) |entity_id| {
+            try db.addComponents(entity_id, .{Velocity{ .dx = 1.0, .dy = 0.0 }});
+        }
+
+        // Remove Velocity (Position+Health+Velocity -> Position+Health archetype)
+        for (entities.items) |entity_id| {
+            try db.removeComponents(entity_id, .{Velocity});
+        }
+
+        // Remove Health (Position+Health -> Position archetype)
+        for (entities.items) |entity_id| {
+            try db.removeComponents(entity_id, .{Health});
+        }
+    }
+
+    // At the end, all entities should be back in the original Position-only archetype
+    for (entities.items) |entity_id| {
+        const entity = db.getEntity(entity_id).?;
+        try testing.expect(entity.has(Position));
+        try testing.expect(!entity.has(Health));
+        try testing.expect(!entity.has(Velocity));
+    }
+
+    // Clean up
+    for (entities.items) |entity_id| {
+        try db.removeEntity(entity_id);
+    }
+}

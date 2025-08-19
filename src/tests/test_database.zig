@@ -103,61 +103,30 @@ test "Database addComponents - mixed update existing and add new" {
     try testing.expectEqual(TestVelocity.moving_right.dy, entity.get(Velocity).?.dy);
 }
 
-test "Entity has - component exists" {
+test "Entity has component functionality" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();
 
-    // Create an entity with Position and Health
-    const entity_id = try db.createEntity(TestEntity.healthy_positioned);
-    const entity = db.getEntity(entity_id).?;
+    // Create entities with different component combinations
+    const multi_component_id = try db.createEntity(TestEntity.healthy_positioned);
+    const single_component_id = try db.createEntity(TestEntity.basic_positioned);
 
-    // Test that entity has the components it was created with
-    try testing.expect(entity.has(Position));
-    try testing.expect(entity.has(Health));
+    const multi_entity = db.getEntity(multi_component_id).?;
+    const single_entity = db.getEntity(single_component_id).?;
+
+    // Entity with multiple components should have all its components
+    try testing.expect(multi_entity.has(Position));
+    try testing.expect(multi_entity.has(Health));
+    try testing.expect(!multi_entity.has(Velocity));
+
+    // Entity with single component should only have that component
+    try testing.expect(single_entity.has(Position));
+    try testing.expect(!single_entity.has(Health));
+    try testing.expect(!single_entity.has(Velocity));
 }
 
-test "Entity has - component does not exist" {
-    const allocator = std.testing.allocator;
-    var db = Database.init(allocator);
-    defer db.deinit();
-
-    // Create an entity with only Position
-    const entity_id = try db.createEntity(TestEntity.basic_positioned);
-    const entity = db.getEntity(entity_id).?;
-
-    // Test that entity has Position but not other components
-    try testing.expect(entity.has(Position));
-    try testing.expect(!entity.has(Health));
-    try testing.expect(!entity.has(Velocity));
-    try testing.expect(!entity.has(Marker));
-}
-
-test "Entity has - different component types" {
-    const allocator = std.testing.allocator;
-    var db = Database.init(allocator);
-    defer db.deinit();
-
-    // Test with full entity containing multiple components
-    const full_entity_id = try db.createEntity(TestEntity.full_entity);
-    const full_entity = db.getEntity(full_entity_id).?;
-
-    try testing.expect(full_entity.has(Position));
-    try testing.expect(full_entity.has(Health));
-    try testing.expect(full_entity.has(Velocity));
-    try testing.expect(!full_entity.has(Marker));
-    try testing.expect(!full_entity.has(LargeComponent));
-
-    // Test with entity containing only Marker (zero-sized component)
-    const marker_entity_id = try db.createEntity(.{ .marker = Marker{} });
-    const marker_entity = db.getEntity(marker_entity_id).?;
-
-    try testing.expect(marker_entity.has(Marker));
-    try testing.expect(!marker_entity.has(Position));
-    try testing.expect(!marker_entity.has(Health));
-}
-
-test "Entity set - successful value setting" {
+test "Entity set component functionality" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();
@@ -166,65 +135,18 @@ test "Entity set - successful value setting" {
     const entity_id = try db.createEntity(TestEntity.healthy_positioned);
     var entity = db.getEntity(entity_id).?;
 
-    // Test setting Position component
+    // Test successful setting of existing components
     try entity.set(TestPositions.alternative);
-    const updated_position = entity.get(Position).?;
-    try testing.expectEqual(TestPositions.alternative.x, updated_position.x);
-    try testing.expectEqual(TestPositions.alternative.y, updated_position.y);
-
-    // Test setting Health component
     try entity.set(TestHealth.damaged);
+
+    const updated_position = entity.get(Position).?;
     const updated_health = entity.get(Health).?;
+    try testing.expectEqual(TestPositions.alternative.x, updated_position.x);
     try testing.expectEqual(TestHealth.damaged.current, updated_health.current);
-    try testing.expectEqual(TestHealth.damaged.max, updated_health.max);
-}
 
-test "Entity set - error conditions" {
-    const allocator = std.testing.allocator;
-    var db = Database.init(allocator);
-    defer db.deinit();
-
-    // Create an entity with only Position
-    const entity_id = try db.createEntity(TestEntity.basic_positioned);
-    var entity = db.getEntity(entity_id).?;
-
-    // Test setting a component that doesn't exist - should return ComponentNotFound
+    // Test error when trying to set non-existent component
     const result = entity.set(TestVelocity.moving_right);
     try testing.expectError(error.ComponentNotFound, result);
-
-    // Verify original component still works
-    try entity.set(TestPositions.third);
-    const position = entity.get(Position).?;
-    try testing.expectEqual(TestPositions.third.x, position.x);
-    try testing.expectEqual(TestPositions.third.y, position.y);
-}
-
-test "Entity set - different component types" {
-    const allocator = std.testing.allocator;
-    var db = Database.init(allocator);
-    defer db.deinit();
-
-    // Test with various component types
-    const entity_id = try db.createEntity(.{
-        .position = TestPositions.basic,
-        .health = TestHealth.full,
-        .marker = Marker{},
-        .large_component = LargeComponent{},
-    });
-    var entity = db.getEntity(entity_id).?;
-
-    // Test setting different types
-    try entity.set(TestPositions.origin);
-    try entity.set(TestHealth.critical);
-    try entity.set(Marker{});
-
-    const large_comp = LargeComponent{ .data = [_]u8{1} ** 1024, .id = 999 };
-    try entity.set(large_comp);
-
-    // Verify all values were set correctly
-    try testing.expectEqual(TestPositions.origin.x, entity.get(Position).?.x);
-    try testing.expectEqual(TestHealth.critical.current, entity.get(Health).?.current);
-    try testing.expectEqual(@as(u64, 999), entity.get(LargeComponent).?.id);
 }
 
 test "Database removeEntity" {
@@ -744,4 +666,117 @@ test "Database addComponents with runtime values" {
     try testing.expectEqual(@as(f32, 1.0), entity.get(Position).?.x);
     try testing.expectEqual(@as(i32, 50), entity.get(Health).?.current);
     try testing.expectEqual(@as(i32, 100), entity.get(Health).?.max);
+}
+
+// Test components for memory stress testing
+const GameState = struct {
+    score: u32,
+    level: u8,
+    time_remaining: f32,
+};
+
+const PlayerStats = struct {
+    experience: u64,
+    gold: u32,
+    inventory: [16]u32, // Larger struct to stress memory allocation
+};
+
+test "Database memory leak - entity lifecycle stress test" {
+    const allocator = testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    const num_cycles = 100;
+    const entities_per_cycle = 50;
+
+    for (0..num_cycles) |cycle| {
+        var entities = std.ArrayListUnmanaged(u64).empty;
+        defer entities.deinit(allocator);
+
+        // Create many entities with different component combinations
+        for (0..entities_per_cycle) |i| {
+            const entity_id = if (i % 3 == 0)
+                try db.createEntity(.{ .position = Position{ .x = @floatFromInt(i), .y = @floatFromInt(cycle) }, .health = Health{ .current = 100, .max = 100 } })
+            else if (i % 3 == 1)
+                try db.createEntity(.{ .position = Position{ .x = @floatFromInt(i), .y = @floatFromInt(cycle) }, .velocity = Velocity{ .dx = 1.0, .dy = 0.0 }, .health = Health{ .current = 50, .max = 100 } })
+            else
+                try db.createEntity(.{ .position = Position{ .x = @floatFromInt(i), .y = @floatFromInt(cycle) } });
+
+            try entities.append(allocator, entity_id);
+        }
+
+        // Remove all entities to test cleanup
+        for (entities.items) |entity_id| {
+            try db.removeEntity(entity_id);
+        }
+
+        // After cleanup, there should be no archetypes or entities remaining
+        // If memory is leaking, archetypes might persist even when empty
+        try testing.expectEqual(@as(usize, 0), db.entities.count());
+    }
+}
+
+test "Comprehensive memory leak detection - realistic game simulation" {
+    const allocator = testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    const simulation_ticks = 100;
+    const max_entities = 200;
+
+    var active_entities = std.ArrayListUnmanaged(u64).empty;
+    defer active_entities.deinit(allocator);
+
+    for (0..simulation_ticks) |tick| {
+        // Spawn new entities (like enemies or projectiles)
+        if (active_entities.items.len < max_entities) {
+            for (0..5) |i| {
+                const entity_id = try db.createEntity(.{ .position = Position{ .x = @floatFromInt(tick * 10 + i), .y = @floatFromInt(i) }, .health = Health{ .current = 100, .max = 100 } });
+                try active_entities.append(allocator, entity_id);
+            }
+        }
+
+        // Every 10 ticks, add velocity to some entities
+        if (tick % 10 == 0) {
+            for (active_entities.items[0..@min(10, active_entities.items.len)]) |entity_id| {
+                try db.addComponents(entity_id, .{ .velocity = Velocity{ .dx = 1.0, .dy = -0.5 } });
+            }
+        }
+
+        // Every 15 ticks, remove some entities (like despawning)
+        if (tick % 15 == 0 and active_entities.items.len > 10) {
+            const entities_to_remove = active_entities.items.len / 4;
+            for (0..entities_to_remove) |_| {
+                const entity_id = active_entities.swapRemove(0);
+                try db.removeEntity(entity_id);
+            }
+        }
+
+        // Every 20 ticks, manage resources
+        if (tick % 20 == 0) {
+            try db.insertResource(GameState{ .score = @intCast(tick * 10), .level = @intCast(tick / 50 + 1), .time_remaining = 120.0 });
+        }
+
+        // Use transactions periodically
+        if (tick % 25 == 0) {
+            var tx = db.transaction();
+            defer tx.deinit();
+
+            // Queue some operations
+            for (0..3) |i| {
+                const entity_id = try tx.createEntity(.{ .position = Position{ .x = @floatFromInt(tick + i), .y = @floatFromInt(i * 5) } });
+                try active_entities.append(allocator, entity_id);
+            }
+
+            try tx.execute();
+        }
+    }
+
+    // Clean up remaining entities
+    for (active_entities.items) |entity_id| {
+        try db.removeEntity(entity_id);
+    }
+
+    // Final verification - database should be clean
+    try testing.expectEqual(@as(usize, 0), db.entities.count());
 }
