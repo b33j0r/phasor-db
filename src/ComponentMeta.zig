@@ -25,7 +25,10 @@ pub fn init(id: ComponentId, size: usize, alignment: u29, trait: ?Trait) Compone
 
 pub fn from(comptime T: anytype) ComponentMeta {
     // This can be used with a type or a value.
-    const ComponentT = if (@TypeOf(T) == type) T else @TypeOf(T);
+    const ComponentT = switch (@TypeOf(T)) {
+        type => T,
+        else => @TypeOf(T),
+    };
     const trait = Trait.maybeFrom(ComponentT);
     return ComponentMeta.init(
         componentId(ComponentT),

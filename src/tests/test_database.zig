@@ -409,7 +409,7 @@ test "Database removeComponents - remove non-existent component (no-op)" {
     const original_archetype_count = db.archetypes.count();
 
     // Try to remove Health (which doesn't exist) - should be a no-op
-    try db.removeComponents(entity_id, .{ .health = TestHealth.critical });
+    try db.removeComponents(entity_id, .{TestHealth.critical});
 
     // Should still have the same number of archetypes
     try testing.expectEqual(original_archetype_count, db.archetypes.count());
