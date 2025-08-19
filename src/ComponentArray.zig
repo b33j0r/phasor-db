@@ -62,14 +62,18 @@ pub fn deinit(self: *ComponentArray) void {
 }
 
 pub fn get(self: *const ComponentArray, index: usize, comptime T: type) ?*T {
-    if (self.meta.size == 0 or index >= self.len) return null;
+    if (index >= self.len) return null;
+
+    if (@sizeOf(T) == 0) {
+        // For ZSTs, return a pointer to a global constant
+        const global_zst: T = .{};
+        return @as(*T, @ptrFromInt(@intFromPtr(&global_zst)));
+    }
+
     const offset = index * self.meta.stride;
     // Ensure the pointer is properly aligned for type T
     const ptr = self.data.ptr + offset;
-    if (@intFromPtr(ptr) % @alignOf(T) != 0) {
-        // Memory is not aligned correctly - this should not happen with proper stride calculation
-        return null;
-    }
+    std.debug.assert(@intFromPtr(ptr) % @alignOf(T) == 0);
     return @as(*T, @ptrCast(@alignCast(ptr)));
 }
 

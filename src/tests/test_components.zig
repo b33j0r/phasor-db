@@ -356,9 +356,8 @@ test "ComponentArray zero-sized component operations" {
 
     try testing.expectEqual(@as(usize, 2), empty_array.len);
 
-    // Get should return null for zero-sized types
-    try testing.expect(empty_array.get(0, Marker) == null);
-    try testing.expect(empty_array.get(1, Marker) == null);
+    try testing.expect(empty_array.get(0, Marker) != null);
+    try testing.expect(empty_array.get(1, Marker) != null);
 
     empty_array.swapRemove(0);
     try testing.expectEqual(@as(usize, 1), empty_array.len);
