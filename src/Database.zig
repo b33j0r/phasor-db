@@ -364,36 +364,7 @@ pub fn removeComponents(
 
 /// Queries the database for archetypes that match the specified component types.
 pub fn query(self: *Database, spec: anytype) !Query {
-    var archetype_ids: std.ArrayListUnmanaged(Archetype.Id) = .empty;
-    var component_ids: std.ArrayListUnmanaged(ComponentId) = .empty;
-    defer component_ids.deinit(self.allocator);
-    const spec_info = @typeInfo(@TypeOf(spec)).@"struct";
-    inline for (spec_info.fields) |field| {
-        const field_value = @field(spec, field.name);
-        const field_type = @TypeOf(field_value);
-
-        // Handle the case where the field contains a type (not an instance)
-        const component_id = if (field_type == type)
-            componentId(field_value) // field_value is the actual type
-        else
-            componentId(field_type); // field_value is an instance, so get its type
-
-        try component_ids.append(self.allocator, component_id);
-    }
-
-    var it = self.archetypes.iterator();
-    while (it.next()) |entry| {
-        const archetype = entry.value_ptr;
-        if (archetype.hasComponents(component_ids.items)) {
-            try archetype_ids.append(self.allocator, archetype.id);
-        }
-    }
-
-    return Query{
-        .allocator = self.allocator,
-        .database = self,
-        .archetype_ids = archetype_ids,
-    };
+    return Query.fromComponentTypes(self.allocator, self, spec);
 }
 
 test query {

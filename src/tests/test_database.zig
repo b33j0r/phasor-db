@@ -780,3 +780,144 @@ test "Comprehensive memory leak detection - realistic game simulation" {
     // Final verification - database should be clean
     try testing.expectEqual(@as(usize, 0), db.entities.count());
 }
+
+test "Database simulated ECS renderer" {
+    // This test simulates a renderer that groups entities by Camera
+    // then Layer. It is meant to make sure the database can handle
+    // a real-world ECS use case that is more complex than simple
+    // component queries.
+
+    // The goal is to efficiently group and sort by: (Viewport, Layer)
+    // This is a two-level iteration that should map to our archetype
+    // design neatly (if a little fragmented for small numbers of
+    // entities).
+    const Types = struct {
+        pub const Camera = struct {};
+        pub fn Viewport(V: i32) type {
+            const Self = struct {
+                pub const __group_key__: i32 = V;
+                pub const __trait__ = ViewportN;
+            };
+            return Self;
+        }
+        pub const ViewportN = struct {};
+
+        pub fn Layer(L: i32) type {
+            const Self = struct {
+                pub const __group_key__: i32 = L;
+                pub const __trait__ = LayerN;
+            };
+            return Self;
+        }
+        pub const LayerN = struct {};
+
+        pub const Renderable = struct {};
+    };
+
+    const Camera = Types.Camera;
+    const Viewport = Types.Viewport;
+    const ViewportN = Types.ViewportN;
+    const Layer = Types.Layer;
+    const LayerN = Types.LayerN;
+    const Renderable = Types.Renderable;
+
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // The example has two viewports, each with two layers.
+
+    const camera_a = try db.createEntity(.{
+        Camera{},
+        Viewport(0){},
+    });
+    const renderable_a1 = try db.createEntity(.{
+        Renderable{},
+        Viewport(0){},
+        Layer(0){},
+    });
+    const renderable_a2 = try db.createEntity(.{
+        Renderable{},
+        Viewport(0){},
+        Layer(1){},
+    });
+
+    const camera_b = try db.createEntity(.{
+        Camera{},
+        Viewport(1){},
+    });
+    const renderable_b1 = try db.createEntity(.{
+        Renderable{},
+        Viewport(1){},
+        Layer(0){},
+    });
+    const renderable_b2 = try db.createEntity(.{
+        Renderable{},
+        Viewport(1){},
+        Layer(1){},
+    });
+
+    var viewport_groups = try db.groupBy(ViewportN);
+    defer viewport_groups.deinit();
+
+    try testing.expectEqual(2, viewport_groups.count());
+
+    var viewport_groups_it = viewport_groups.iterator();
+
+    // Collect Viewport A
+    const viewport_group_a = viewport_groups_it.next().?;
+    var viewport_camera_a_query = try viewport_group_a.query(.{Camera});
+    defer viewport_camera_a_query.deinit();
+
+    // Collect Renderables in Viewport A
+    var layer_groups_a = try viewport_group_a.groupBy(LayerN);
+    defer layer_groups_a.deinit();
+
+    // Get the two layer groups in Viewport A
+    var layer_groups_a_it = layer_groups_a.iterator();
+    const layer_renderable_g1 = layer_groups_a_it.next().?;
+    const layer_renderable_g2 = layer_groups_a_it.next().?;
+
+    // Verify we have two layer groups with our renderables
+    var layer_renderable_g1_it = layer_renderable_g1.iterator();
+    const layer_renderable_a1 = layer_renderable_g1_it.next().?;
+    try testing.expectEqual(renderable_a1, layer_renderable_a1.id);
+    try testing.expectEqual(null, layer_renderable_g1_it.next()); // null
+
+    var layer_renderable_g2_it = layer_renderable_g2.iterator();
+    const layer_renderable_a2 = layer_renderable_g2_it.next().?;
+    try testing.expectEqual(renderable_a2, layer_renderable_a2.id);
+    try testing.expectEqual(null, layer_renderable_g2_it.next()); // null
+
+    // Collect Viewport B
+    const viewport_group_b = viewport_groups_it.next().?;
+    var viewport_camera_b_query = try viewport_group_b.query(.{Camera});
+    defer viewport_camera_b_query.deinit();
+
+    // Collect Renderables in Viewport B
+    var layer_groups_b = try viewport_group_b.groupBy(LayerN);
+    defer layer_groups_b.deinit();
+
+    // Get the two layer groups in Viewport B
+    var layer_groups_b_it = layer_groups_b.iterator();
+    const layer_renderable_b1 = layer_groups_b_it.next().?;
+    const layer_renderable_b2 = layer_groups_b_it.next().?;
+
+    // Verify we have two layer groups with our renderables
+    var layer_renderable_b1_it = layer_renderable_b1.iterator();
+    const layer_renderable_b1_entity = layer_renderable_b1_it.next().?;
+    try testing.expectEqual(renderable_b1, layer_renderable_b1_entity.id);
+    try testing.expectEqual(null, layer_renderable_b1_it.next()); // null
+
+    var layer_renderable_b2_it = layer_renderable_b2.iterator();
+    const layer_renderable_b2_entity = layer_renderable_b2_it.next().?;
+    try testing.expectEqual(renderable_b2, layer_renderable_b2_entity.id);
+    try testing.expectEqual(null, layer_renderable_b2_it.next()); // null
+
+    // Test subqueries last
+    const viewport_camera_a = viewport_camera_a_query.first().?.id;
+    try testing.expectEqual(camera_a, viewport_camera_a);
+
+    const viewport_camera_b = viewport_camera_b_query.first().?.id;
+    try testing.expectEqual(camera_b, viewport_camera_b);
+}

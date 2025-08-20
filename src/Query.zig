@@ -3,12 +3,82 @@ const root = @import("root.zig");
 const Database = root.Database;
 const Entity = root.Entity;
 const Archetype = root.Archetype;
+const ComponentId = root.ComponentId;
+const componentId = root.componentId;
 
 allocator: std.mem.Allocator,
 database: *Database,
 archetype_ids: std.ArrayListUnmanaged(Archetype.Id),
 
 const Query = @This();
+
+/// Helper function to extract component IDs from a component specification
+fn extractComponentIds(allocator: std.mem.Allocator, components: anytype) !std.ArrayListUnmanaged(ComponentId) {
+    var component_ids: std.ArrayListUnmanaged(ComponentId) = .empty;
+    const spec_info = @typeInfo(@TypeOf(components)).@"struct";
+    inline for (spec_info.fields) |field| {
+        const field_value = @field(components, field.name);
+        const field_type = @TypeOf(field_value);
+
+        // Handle the case where the field contains a type (not an instance)
+        const component_id = if (field_type == type)
+            componentId(field_value) // field_value is the actual type
+        else
+            componentId(field_type); // field_value is an instance, so get its type
+
+        try component_ids.append(allocator, component_id);
+    }
+    return component_ids;
+}
+
+pub fn fromComponentTypes(
+    allocator: std.mem.Allocator,
+    database: *Database,
+    spec: anytype,
+) !Query {
+    var archetype_ids: std.ArrayListUnmanaged(Archetype.Id) = .empty;
+    var component_ids = try extractComponentIds(allocator, spec);
+    defer component_ids.deinit(allocator);
+
+    var it = database.archetypes.iterator();
+    while (it.next()) |entry| {
+        const archetype = entry.value_ptr;
+        if (archetype.hasComponents(component_ids.items)) {
+            try archetype_ids.append(allocator, archetype.id);
+        }
+    }
+
+    return Query{
+        .allocator = allocator,
+        .database = database,
+        .archetype_ids = archetype_ids,
+    };
+}
+
+pub fn fromComponentTypesAndArchetypeIds(
+    allocator: std.mem.Allocator,
+    database: *Database,
+    archetype_ids: []const Archetype.Id,
+    components: anytype,
+) !Query {
+    var component_ids = try extractComponentIds(allocator, components);
+    defer component_ids.deinit(allocator);
+
+    var query_archetype_ids: std.ArrayListUnmanaged(Archetype.Id) = .empty;
+
+    for (archetype_ids) |archetype_id| {
+        const archetype = database.archetypes.get(archetype_id) orelse continue;
+        if (archetype.hasComponents(component_ids.items)) {
+            try query_archetype_ids.append(allocator, archetype.id);
+        }
+    }
+
+    return Query{
+        .allocator = allocator,
+        .database = database,
+        .archetype_ids = query_archetype_ids,
+    };
+}
 
 pub fn deinit(self: *Query) void {
     self.archetype_ids.deinit(self.allocator);

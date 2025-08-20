@@ -19,10 +19,18 @@ pub const ComponentId = u64;
 
 /// `componentId` generates a unique identifier for a component type or value.
 /// It uses the fully-qualified type name as input to a hash function.
+/// For components with traits that have group keys, the group key is included in the hash.
 pub fn componentId(comptime T: anytype) ComponentId {
     const ComponentT = if (@TypeOf(T) == type) T else @TypeOf(T);
     var hasher = std.hash.Wyhash.init(0);
     hasher.update(@typeName(ComponentT));
+    
+    // If the component has a trait with a group key, include it in the hash
+    if (@hasDecl(ComponentT, "__trait__") and @hasDecl(ComponentT, "__group_key__")) {
+        const group_key_bytes = std.mem.asBytes(&ComponentT.__group_key__);
+        hasher.update(group_key_bytes);
+    }
+    
     return hasher.final();
 }
 

@@ -5,12 +5,77 @@ const Entity = root.Entity;
 const Archetype = root.Archetype;
 const ComponentId = root.ComponentId;
 const componentId = root.componentId;
+const Query = root.Query;
 
 allocator: std.mem.Allocator,
 database: *Database,
 groups: std.ArrayListUnmanaged(Group),
 
 const GroupBy = @This();
+
+/// Generic function to group archetypes by trait key
+fn groupArchetypesByTrait(
+    allocator: std.mem.Allocator,
+    database: *Database,
+    archetype_ids: []const Archetype.Id,
+    trait_id: ComponentId,
+) !std.ArrayListUnmanaged(Group) {
+    var groups = std.ArrayListUnmanaged(Group).empty;
+
+    for (archetype_ids) |archetype_id| {
+        const archetype = database.archetypes.getPtr(archetype_id) orelse continue;
+        
+        // Look through all columns in this archetype to find components with the specified trait
+        for (archetype.columns) |*column| {
+            const trait = column.meta.trait orelse continue;
+            
+            // Check if this component's trait matches the trait we're grouping by
+            if (trait.id != trait_id) continue;
+            
+            const group_key = switch (trait.kind) {
+                .Grouped => |grouped| grouped.group_key,
+                else => continue, // Only handle Grouped traits
+            };
+
+            // Find or create the group for this key
+            var found_group: ?*Group = null;
+            for (groups.items) |*group| {
+                if (group.key == group_key) {
+                    found_group = group;
+                    break;
+                }
+            }
+
+            // Create a new group if it doesn't exist
+            if (found_group == null) {
+                const new_group = Group.init(allocator, column.meta.id, group_key, database);
+                try groups.append(allocator, new_group);
+                found_group = &groups.items[groups.items.len - 1];
+            }
+
+            // Add the archetype to the group (only once per archetype)
+            var already_added = false;
+            for (found_group.?.archetype_ids.items) |existing_id| {
+                if (existing_id == archetype_id) {
+                    already_added = true;
+                    break;
+                }
+            }
+            if (!already_added) {
+                try found_group.?.addArchetypeId(archetype_id);
+            }
+        }
+    }
+
+    // Sort groups by key for consistent ordering
+    std.mem.sort(Group, groups.items, {}, struct {
+        fn lessThan(_: void, a: Group, b: Group) bool {
+            return a.key < b.key;
+        }
+    }.lessThan);
+
+    return groups;
+}
 
 pub fn fromTraitType(
     allocator: std.mem.Allocator,
@@ -23,46 +88,17 @@ pub fn fromTraitType(
         .groups = .empty,
     };
 
-    // Iterate over all archetypes and group entities by the trait key
+    // Get all archetype IDs from the database
+    var archetype_ids = std.ArrayListUnmanaged(Archetype.Id).empty;
+    defer archetype_ids.deinit(allocator);
+
     var archetype_iterator = database.archetypes.iterator();
-    const trait_id = componentId(TraitT);
     while (archetype_iterator.next()) |entry| {
-        const archetype_id = entry.key_ptr.*;
-        const archetype = entry.value_ptr.*;
-        const trait_column = archetype.getColumn(trait_id) orelse continue;
-        const component_id = trait_column.meta.id;
-        const trait = trait_column.meta.trait orelse continue;
-        const group_key = switch (trait.kind) {
-            .Grouped => |grouped| grouped.group_key,
-            else => continue, // Only handle Grouped traits
-        };
-
-        // Find or create the group for this key
-        var found_group: ?*Group = null;
-        for (group_by.groups.items) |*group| {
-            if (group.key == group_key) {
-                found_group = group;
-                break;
-            }
-        }
-
-        // Create a new group if it doesn't exist
-        if (found_group == null) {
-            const new_group = Group.init(allocator, component_id, group_key, database);
-            try group_by.groups.append(allocator, new_group);
-            found_group = &group_by.groups.items[group_by.groups.items.len - 1];
-        }
-
-        // Add the archetype to the group
-        try found_group.?.addArchetypeId(archetype_id);
+        try archetype_ids.append(allocator, entry.key_ptr.*);
     }
 
-    // Sort groups by key for consistent ordering
-    std.mem.sort(Group, group_by.groups.items, {}, struct {
-        fn lessThan(_: void, a: Group, b: Group) bool {
-            return a.key < b.key;
-        }
-    }.lessThan);
+    const trait_id = componentId(TraitT);
+    group_by.groups = try groupArchetypesByTrait(allocator, database, archetype_ids.items, trait_id);
 
     return group_by;
 }
@@ -109,6 +145,48 @@ pub const Group = struct {
 
     pub fn addArchetypeId(self: *Group, archetype_id: Archetype.Id) !void {
         try self.archetype_ids.append(self.allocator, archetype_id);
+    }
+
+    /// Group this group's entities by another trait to create nested groups
+    pub fn groupBy(self: *const Group, TraitT: anytype) !GroupBy {
+        // Check if this group has any archetype IDs before proceeding
+        if (self.archetype_ids.items.len == 0) {
+            return GroupBy{
+                .allocator = self.allocator,
+                .database = self.database,
+                .groups = .empty,
+            };
+        }
+
+        var group_by = GroupBy{
+            .allocator = self.allocator,
+            .database = self.database,
+            .groups = .empty,
+        };
+
+        const trait_id = componentId(TraitT);
+        group_by.groups = try groupArchetypesByTrait(self.allocator, self.database, self.archetype_ids.items, trait_id);
+
+        return group_by;
+    }
+
+    /// Do a subquery on this group
+    pub fn query(self: *const Group, components: anytype) !root.Query {
+        // Handle empty group case gracefully
+        if (self.archetype_ids.items.len == 0) {
+            return root.Query{
+                .allocator = self.allocator,
+                .database = self.database,
+                .archetype_ids = .empty,
+            };
+        }
+
+        return Query.fromComponentTypesAndArchetypeIds(
+            self.allocator,
+            self.database,
+            self.archetype_ids.items,
+            components,
+        );
     }
 
     pub fn iterator(self: *const Group) EntityIterator {
