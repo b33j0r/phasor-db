@@ -782,10 +782,9 @@ test "Comprehensive memory leak detection - realistic game simulation" {
 }
 
 test "Database simulated ECS renderer" {
-    // This test simulates a renderer that groups entities by Camera
-    // then Layer. It is meant to make sure the database can handle
-    // a real-world ECS use case that is more complex than simple
-    // component queries.
+    // This test simulates a renderer. It is meant to make sure the
+    // database can handle a real-world ECS use case that is more
+    // complex than simple component queries.
 
     // The goal is to efficiently group and sort by: (Viewport, Layer)
     // This is a two-level iteration that should map to our archetype
