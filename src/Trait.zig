@@ -1,7 +1,7 @@
 //! A `Trait` is a virtual component that can be queried based
 //! on the presence of another component. For example, you can
-//! have a `Renderable` struct, and specify that Circle and
-//! Square components both have `Renderable` as a trait.
+//! have a `Renderable` struct, and specify that `Circle` and
+//! `Square` components both have `Renderable` as a trait.
 //! Then you can query for Renderable entities and get both
 //! Circle and Square entities in the result.
 
@@ -15,13 +15,9 @@ kind: Kind,
 
 const Trait = @This();
 
-pub const Kind = union(enum) {
-    Marker,
-    IdenticalLayout,
-    Grouped: struct {
-        group_key: i32,
-    }
-};
+pub const Kind = union(enum) { Marker, IdenticalLayout, Grouped: struct {
+    group_key: i32,
+} };
 
 pub fn maybeFrom(comptime ComponentT: anytype) ?Trait {
     // check for the __trait__ declaration
@@ -38,7 +34,7 @@ pub fn maybeFrom(comptime ComponentT: anytype) ?Trait {
             if (@hasDecl(ComponentT, "__group_key__")) {
                 break :blk Trait.Kind{ .Grouped = .{
                     .group_key = ComponentT.__group_key__,
-                }};
+                } };
             }
 
             // If it's a zero-sized struct, it's a marker trait
@@ -49,12 +45,12 @@ pub fn maybeFrom(comptime ComponentT: anytype) ?Trait {
             // If it's a struct with the same layout as the component, it's identical layout
             if (@sizeOf(TraitT) == @sizeOf(ComponentT) and
                 @alignOf(TraitT) == @alignOf(ComponentT))
-                {
-                    verifyIdenticalLayout(TraitT, ComponentT);
-                    break :blk Trait.Kind.IdenticalLayout;
-                } else {
-                    @compileError("Trait struct layout does not match component layout");
-                }
+            {
+                verifyIdenticalLayout(TraitT, ComponentT);
+                break :blk Trait.Kind.IdenticalLayout;
+            } else {
+                @compileError("Trait struct layout does not match component layout");
+            }
         },
         else => @compileError("Trait must be a struct"),
     };

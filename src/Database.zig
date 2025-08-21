@@ -403,6 +403,74 @@ pub fn groupBy(self: *Database, TraitT: type) !GroupBy {
     return GroupBy.fromTraitType(self.allocator, self, TraitT);
 }
 
+test groupBy {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    const Types = struct {
+        pub const Data = struct {
+            number: i32,
+        };
+
+        pub fn Layer(N: i32) type {
+            return struct {
+                pub const __group_key__ = N;
+                pub const __trait__ = LayerN;
+            };
+        }
+
+        pub const LayerN = struct {};
+    };
+
+    const Layer = Types.Layer;
+    const LayerN = Types.LayerN;
+
+    // Create some entities with different layers
+    _ = try db.createEntity(.{
+        Layer(1){},
+        Types.Data{ .number = 10 },
+    });
+    _ = try db.createEntity(.{
+        Layer(2){},
+        Types.Data{ .number = 20 },
+    });
+    _ = try db.createEntity(.{
+        Layer(1){},
+        Types.Data{ .number = 30 },
+    });
+
+    // Query for groups by Layer trait
+    var group_by = try db.groupBy(LayerN);
+    defer group_by.deinit();
+
+    try std.testing.expectEqual(2, group_by.count());
+
+    // Check the groups
+    var it = group_by.iterator();
+    const layer_1_group = it.next().?;
+    const layer_2_group = it.next().?;
+    try std.testing.expectEqual(null, it.next()); // No more groups
+
+    // Check Layer 1 group
+    var layer_1_group_it = layer_1_group.iterator();
+    const layer_1_entity_1 = layer_1_group_it.next().?;
+    const layer_1_entity_2 = layer_1_group_it.next().?;
+    try std.testing.expectEqual(null, layer_1_group_it.next()); // No more entities
+
+    // Check Layer 2 group
+    var layer_2_group_it = layer_2_group.iterator();
+    const layer_2_entity = layer_2_group_it.next().?;
+    try std.testing.expectEqual(null, layer_2_group_it.next()); // No more entities
+
+    // Verify entities in Layer 1
+    try std.testing.expectEqual(10, layer_1_entity_1.get(Types.Data).?.number);
+    try std.testing.expectEqual(30, layer_1_entity_2.get(Types.Data).?.number);
+
+    // Verify entity in Layer 2
+    try std.testing.expectEqual(20, layer_2_entity.get(Types.Data).?.number);
+}
+
 //
 // Resource Management Methods
 //
