@@ -156,7 +156,68 @@ test "Database groupBy" {
     try testing.expectEqual(null, group2_iterator.next());
 }
 
-test "GroupBy iteration order regression - heap order disruption" {
+test "Database - query then groupBy" {
+    const ComponentTypeFactory = struct {
+        pub fn Component(N: i32) type {
+            return struct {
+                pub const __group_key__ = N;
+                pub const __trait__ = ComponentN;
+            };
+        }
+
+        pub const ComponentN = struct {};
+    };
+    const Component = ComponentTypeFactory.Component;
+    const ComponentN = ComponentTypeFactory.ComponentN;
+
+    const Component1 = Component(1);
+    const Component2 = Component(2);
+
+    const QueryComponent = struct {};
+
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create disjoint entities
+    const entity1a_id = try db.createEntity(.{ Component1{}, QueryComponent{} });
+    _ = try db.createEntity(.{Component1{}});
+    const entity2a_id = try db.createEntity(.{ Component2{}, QueryComponent{} });
+
+    // Query for entities with QueryComponent
+    var query = try db.query(.{QueryComponent});
+    defer query.deinit();
+
+    try testing.expectEqual(2, query.count());
+
+    // Group by ComponentN after querying
+    var groups = try query.groupBy(ComponentN);
+    defer groups.deinit();
+
+    try testing.expectEqual(2, groups.count());
+
+    var group_iterator = groups.iterator();
+    const group1 = group_iterator.next().?;
+    const group2 = group_iterator.next().?;
+    try testing.expectEqual(null, group_iterator.next());
+
+    try testing.expectEqual(1, group1.key);
+    try testing.expectEqual(2, group2.key);
+
+    try testing.expectEqual(componentId(Component1), group1.component_id);
+    try testing.expectEqual(componentId(Component2), group2.component_id);
+
+    var group1_iterator = group1.iterator();
+    var group2_iterator = group2.iterator();
+
+    try testing.expectEqual(entity1a_id, group1_iterator.next().?.id);
+    try testing.expectEqual(null, group1_iterator.next());
+
+    try testing.expectEqual(entity2a_id, group2_iterator.next().?.id);
+    try testing.expectEqual(null, group2_iterator.next());
+}
+
+test "Database - GroupBy iteration order 1" {
     const ComponentTypeFactory = struct {
         pub fn Component(N: i32) type {
             return struct {
@@ -236,7 +297,7 @@ test "GroupBy iteration order regression - heap order disruption" {
     try testing.expectEqual(@as(?*const root.GroupBy.Group, null), group_iterator.next());
 }
 
-test "GroupBy iteration order - stress test with many groups" {
+test "Database - GroupBy iteration order 2" {
     const ComponentTypeFactory = struct {
         pub fn Component(N: i32) type {
             return struct {

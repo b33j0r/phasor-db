@@ -5,6 +5,7 @@ const Entity = root.Entity;
 const Archetype = root.Archetype;
 const ComponentId = root.ComponentId;
 const componentId = root.componentId;
+const GroupBy = root.GroupBy;
 
 allocator: std.mem.Allocator,
 database: *Database,
@@ -105,6 +106,15 @@ pub fn iterator(self: *const Query) Iterator {
 pub fn first(self: *const Query) ?Entity {
     var it = self.iterator();
     return it.next();
+}
+
+pub fn groupBy(self: *const Query, TraitT: anytype) !root.GroupBy {
+    return GroupBy.fromTraitTypeAndArchetypeIds(
+        self.allocator,
+        self.database,
+        self.archetype_ids.items,
+        TraitT,
+    );
 }
 
 /// `Iterator` is used to iterate over entities that match the query.

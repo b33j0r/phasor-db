@@ -13,6 +13,50 @@ groups: std.ArrayListUnmanaged(Group),
 
 const GroupBy = @This();
 
+pub fn fromTraitType(
+    allocator: std.mem.Allocator,
+    database: *Database,
+    TraitT: anytype,
+) !GroupBy {
+    var group_by = GroupBy{
+        .allocator = allocator,
+        .database = database,
+        .groups = .empty,
+    };
+
+    // Get all archetype IDs from the database
+    var archetype_ids = std.ArrayListUnmanaged(Archetype.Id).empty;
+    defer archetype_ids.deinit(allocator);
+
+    var archetype_iterator = database.archetypes.iterator();
+    while (archetype_iterator.next()) |entry| {
+        try archetype_ids.append(allocator, entry.key_ptr.*);
+    }
+
+    const trait_id = componentId(TraitT);
+    group_by.groups = try groupArchetypesByTrait(allocator, database, archetype_ids.items, trait_id);
+
+    return group_by;
+}
+
+pub fn fromTraitTypeAndArchetypeIds(
+    allocator: std.mem.Allocator,
+    database: *Database,
+    archetype_ids: []const Archetype.Id,
+    TraitT: anytype,
+) !GroupBy {
+    var group_by = GroupBy{
+        .allocator = allocator,
+        .database = database,
+        .groups = .empty,
+    };
+
+    const trait_id = componentId(TraitT);
+    group_by.groups = try groupArchetypesByTrait(allocator, database, archetype_ids, trait_id);
+
+    return group_by;
+}
+
 /// Generic function to group archetypes by trait key
 fn groupArchetypesByTrait(
     allocator: std.mem.Allocator,
@@ -24,14 +68,14 @@ fn groupArchetypesByTrait(
 
     for (archetype_ids) |archetype_id| {
         const archetype = database.archetypes.getPtr(archetype_id) orelse continue;
-        
+
         // Look through all columns in this archetype to find components with the specified trait
         for (archetype.columns) |*column| {
             const trait = column.meta.trait orelse continue;
-            
+
             // Check if this component's trait matches the trait we're grouping by
             if (trait.id != trait_id) continue;
-            
+
             const group_key = switch (trait.kind) {
                 .Grouped => |grouped| grouped.group_key,
                 else => continue, // Only handle Grouped traits
@@ -75,32 +119,6 @@ fn groupArchetypesByTrait(
     }.lessThan);
 
     return groups;
-}
-
-pub fn fromTraitType(
-    allocator: std.mem.Allocator,
-    database: *Database,
-    TraitT: anytype,
-) !GroupBy {
-    var group_by = GroupBy{
-        .allocator = allocator,
-        .database = database,
-        .groups = .empty,
-    };
-
-    // Get all archetype IDs from the database
-    var archetype_ids = std.ArrayListUnmanaged(Archetype.Id).empty;
-    defer archetype_ids.deinit(allocator);
-
-    var archetype_iterator = database.archetypes.iterator();
-    while (archetype_iterator.next()) |entry| {
-        try archetype_ids.append(allocator, entry.key_ptr.*);
-    }
-
-    const trait_id = componentId(TraitT);
-    group_by.groups = try groupArchetypesByTrait(allocator, database, archetype_ids.items, trait_id);
-
-    return group_by;
 }
 
 pub fn deinit(self: *GroupBy) void {
