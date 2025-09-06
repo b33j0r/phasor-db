@@ -11,6 +11,7 @@ const ComponentMeta = root.ComponentMeta;
 const ComponentId = root.ComponentId;
 const componentId = root.componentId;
 const Query = root.Query;
+const QueryResult = root.QueryResult;
 const GroupBy = root.GroupBy;
 const Transaction = root.Transaction;
 const ResourceManager = root.ResourceManager;
@@ -363,8 +364,10 @@ pub fn removeComponents(
 }
 
 /// Queries the database for archetypes that match the specified component types.
-pub fn query(self: *Database, spec: anytype) !Query {
-    return Query.fromComponentTypes(self.allocator, self, spec);
+pub fn query(self: *Database, spec: anytype) !QueryResult {
+    var q = try Query.fromComponentTypes(self.allocator, spec);
+    defer q.deinit();
+    return try q.execute(self);
 }
 
 test query {

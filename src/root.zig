@@ -8,6 +8,7 @@ pub const ComponentSet = @import("ComponentSet.zig");
 pub const Database = @import("Database.zig");
 pub const Entity = @import("Entity.zig");
 pub const GroupBy = @import("GroupBy.zig");
+pub const QueryResult = @import("QueryResult.zig");
 pub const Query = @import("Query.zig");
 pub const ResourceManager = @import("ResourceManager.zig");
 pub const Trait = @import("Trait.zig");
@@ -24,13 +25,13 @@ pub fn componentId(comptime T: anytype) ComponentId {
     const ComponentT = if (@TypeOf(T) == type) T else @TypeOf(T);
     var hasher = std.hash.Wyhash.init(0);
     hasher.update(@typeName(ComponentT));
-    
+
     // If the component has a trait with a group key, include it in the hash
     if (@hasDecl(ComponentT, "__trait__") and @hasDecl(ComponentT, "__group_key__")) {
         const group_key_bytes = std.mem.asBytes(&ComponentT.__group_key__);
         hasher.update(group_key_bytes);
     }
-    
+
     return hasher.final();
 }
 

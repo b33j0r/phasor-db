@@ -5,7 +5,7 @@ const Entity = root.Entity;
 const Archetype = root.Archetype;
 const ComponentId = root.ComponentId;
 const componentId = root.componentId;
-const Query = root.Query;
+const QueryResult = root.QueryResult;
 
 allocator: std.mem.Allocator,
 database: *Database,
@@ -189,17 +189,17 @@ pub const Group = struct {
     }
 
     /// Do a subquery on this group
-    pub fn query(self: *const Group, components: anytype) !root.Query {
+    pub fn query(self: *const Group, components: anytype) !root.QueryResult {
         // Handle empty group case gracefully
         if (self.archetype_ids.items.len == 0) {
-            return root.Query{
+            return root.QueryResult{
                 .allocator = self.allocator,
                 .database = self.database,
                 .archetype_ids = .empty,
             };
         }
 
-        return Query.fromComponentTypesAndArchetypeIds(
+        return QueryResult.fromComponentTypesAndArchetypeIds(
             self.allocator,
             self.database,
             self.archetype_ids.items,

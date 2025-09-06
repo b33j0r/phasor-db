@@ -2,7 +2,7 @@ const std = @import("std");
 const root = @import("root.zig");
 const Database = root.Database;
 const Entity = root.Entity;
-const Query = root.Query;
+const QueryResult = root.QueryResult;
 const ComponentId = root.ComponentId;
 const ResourceManager = root.ResourceManager;
 
@@ -57,7 +57,7 @@ pub fn getEntity(self: *Transaction, entity_id: Entity.Id) ?Entity {
     return self.database.getEntity(entity_id);
 }
 
-pub fn query(self: *Transaction, components: anytype) !Query {
+pub fn query(self: *Transaction, components: anytype) !QueryResult {
     return self.database.query(components);
 }
 
