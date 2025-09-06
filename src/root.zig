@@ -8,9 +8,10 @@ pub const ComponentSet = @import("ComponentSet.zig");
 pub const Database = @import("Database.zig");
 pub const Entity = @import("Entity.zig");
 pub const GroupBy = @import("GroupBy.zig");
-pub const QueryResult = @import("QueryResult.zig");
 pub const Query = @import("Query.zig");
+pub const QueryResult = @import("QueryResult.zig");
 pub const ResourceManager = @import("ResourceManager.zig");
+pub const System = @import("systems.zig").System;
 pub const Trait = @import("Trait.zig");
 pub const Transaction = @import("Transaction.zig");
 
