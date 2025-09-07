@@ -11,7 +11,6 @@ pub const GroupBy = @import("GroupBy.zig");
 pub const QuerySpec = @import("QuerySpec.zig");
 pub const QueryResult = @import("QueryResult.zig");
 pub const ResourceManager = @import("ResourceManager.zig");
-pub const System = @import("systems.zig").System;
 pub const Trait = @import("Trait.zig");
 pub const Transaction = @import("Transaction.zig");
 
