@@ -12,7 +12,7 @@ const ComponentId = root.ComponentId;
 const componentId = root.componentId;
 const QuerySpec = root.QuerySpec;
 const QueryResult = root.QueryResult;
-const GroupBy = root.GroupBy;
+const GroupByResult = root.GroupByResult;
 const Transaction = root.Transaction;
 const ResourceManager = root.ResourceManager;
 
@@ -402,8 +402,8 @@ test query {
 }
 
 /// Queries the database for groups within a trait
-pub fn groupBy(self: *Database, TraitT: type) !GroupBy {
-    return GroupBy.fromTraitType(self.allocator, self, TraitT);
+pub fn groupBy(self: *Database, TraitT: type) !GroupByResult {
+    return GroupByResult.fromTraitType(self.allocator, self, TraitT);
 }
 
 test groupBy {

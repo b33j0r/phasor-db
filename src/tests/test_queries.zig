@@ -217,7 +217,7 @@ test "Database - query then groupBy" {
     try testing.expectEqual(null, group2_iterator.next());
 }
 
-test "Database - GroupBy iteration order 1" {
+test "Database - GroupByResult iteration order 1" {
     const ComponentTypeFactory = struct {
         pub fn Component(N: i32) type {
             return struct {
@@ -254,7 +254,7 @@ test "Database - GroupBy iteration order 1" {
     _ = try db.createEntity(.{Component3{}});
     _ = try db.createEntity(.{Component8{}});
 
-    // At this point, a small GroupBy might look correct (3, 5, 8)
+    // At this point, a small GroupByResult might look correct (3, 5, 8)
 
     // Add more entities to trigger heap reorganization
     _ = try db.createEntity(.{Component1{}});
@@ -294,10 +294,10 @@ test "Database - GroupBy iteration order 1" {
     try testing.expectEqual(@as(i32, 9), group7.key);
 
     // Should be no more groups
-    try testing.expectEqual(@as(?*const root.GroupBy.Group, null), group_iterator.next());
+    try testing.expectEqual(@as(?*const root.GroupByResult.Group, null), group_iterator.next());
 }
 
-test "Database - GroupBy iteration order 2" {
+test "Database - GroupByResult iteration order 2" {
     const ComponentTypeFactory = struct {
         pub fn Component(N: i32) type {
             return struct {

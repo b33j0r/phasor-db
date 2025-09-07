@@ -23,6 +23,8 @@ pub const Health = struct {
 
 pub const Marker = struct {};
 
+pub const Player = struct {};
+
 pub const LargeComponent = struct {
     data: [1024]u8 = [_]u8{0} ** 1024,
     id: u64 = 42,

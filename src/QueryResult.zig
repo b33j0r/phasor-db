@@ -5,7 +5,7 @@ const Entity = root.Entity;
 const Archetype = root.Archetype;
 const ComponentId = root.ComponentId;
 const componentId = root.componentId;
-const GroupBy = root.GroupBy;
+const GroupByResult = root.GroupByResult;
 
 allocator: std.mem.Allocator,
 database: *Database,
@@ -108,8 +108,8 @@ pub fn first(self: *const QueryResult) ?Entity {
     return it.next();
 }
 
-pub fn groupBy(self: *const QueryResult, TraitT: anytype) !root.GroupBy {
-    return GroupBy.fromTraitTypeAndArchetypeIds(
+pub fn groupBy(self: *const QueryResult, TraitT: anytype) !root.GroupByResult {
+    return GroupByResult.fromTraitTypeAndArchetypeIds(
         self.allocator,
         self.database,
         self.archetype_ids.items,

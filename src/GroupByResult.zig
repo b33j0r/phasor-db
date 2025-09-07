@@ -11,14 +11,14 @@ allocator: std.mem.Allocator,
 database: *Database,
 groups: std.ArrayListUnmanaged(Group),
 
-const GroupBy = @This();
+const GroupByResult = @This();
 
 pub fn fromTraitType(
     allocator: std.mem.Allocator,
     database: *Database,
     TraitT: anytype,
-) !GroupBy {
-    var group_by = GroupBy{
+) !GroupByResult {
+    var group_by = GroupByResult{
         .allocator = allocator,
         .database = database,
         .groups = .empty,
@@ -44,8 +44,8 @@ pub fn fromTraitTypeAndArchetypeIds(
     database: *Database,
     archetype_ids: []const Archetype.Id,
     TraitT: anytype,
-) !GroupBy {
-    var group_by = GroupBy{
+) !GroupByResult {
+    var group_by = GroupByResult{
         .allocator = allocator,
         .database = database,
         .groups = .empty,
@@ -121,18 +121,18 @@ fn groupArchetypesByTrait(
     return groups;
 }
 
-pub fn deinit(self: *GroupBy) void {
+pub fn deinit(self: *GroupByResult) void {
     for (self.groups.items) |*group| {
         group.deinit();
     }
     self.groups.deinit(self.allocator);
 }
 
-pub fn count(self: *const GroupBy) usize {
+pub fn count(self: *const GroupByResult) usize {
     return self.groups.items.len;
 }
 
-pub fn iterator(self: *const GroupBy) GroupIterator {
+pub fn iterator(self: *const GroupByResult) GroupIterator {
     return GroupIterator{
         .groups = self.groups.items,
         .current_index = 0,
@@ -166,17 +166,17 @@ pub const Group = struct {
     }
 
     /// Group this group's entities by another trait to create nested groups
-    pub fn groupBy(self: *const Group, TraitT: anytype) !GroupBy {
+    pub fn groupBy(self: *const Group, TraitT: anytype) !GroupByResult {
         // Check if this group has any archetype IDs before proceeding
         if (self.archetype_ids.items.len == 0) {
-            return GroupBy{
+            return GroupByResult{
                 .allocator = self.allocator,
                 .database = self.database,
                 .groups = .empty,
             };
         }
 
-        var group_by = GroupBy{
+        var group_by = GroupByResult{
             .allocator = self.allocator,
             .database = self.database,
             .groups = .empty,
