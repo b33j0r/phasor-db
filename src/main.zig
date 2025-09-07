@@ -40,7 +40,7 @@ pub fn main() !void {
     // Add a player component to the first entity
     try db.addComponents(entity, .{Player{}});
 
-    // Query all entities with Position and Velocity components
+    // QuerySpec all entities with Position and Velocity components
     var query = try db.query(.{ Position, Velocity });
     defer query.deinit();
 

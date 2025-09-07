@@ -14,7 +14,7 @@ const Position = fixtures.Position;
 const Health = fixtures.Health;
 const Velocity = fixtures.Velocity;
 
-test "Query first functionality" {
+test "QuerySpec first functionality" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();
@@ -47,7 +47,7 @@ test "Query first functionality" {
     try testing.expect(first_combo.?.has(Health));
 }
 
-test "Query with traits - ComponentX matches Component1 and Component2" {
+test "QuerySpec with traits - ComponentX matches Component1 and Component2" {
     const ComponentTypeFactory = struct {
         pub fn Component(N: i32) type {
             return struct {
@@ -184,7 +184,7 @@ test "Database - query then groupBy" {
     _ = try db.createEntity(.{Component1{}});
     const entity2a_id = try db.createEntity(.{ Component2{}, QueryComponent{} });
 
-    // Query for entities with QueryComponent
+    // QuerySpec for entities with QueryComponent
     var query = try db.query(.{QueryComponent});
     defer query.deinit();
 

@@ -6,13 +6,13 @@ const ComponentId = root.ComponentId;
 const componentId = root.componentId;
 const QueryResult = root.QueryResult;
 
-/// Query is a specification of components (and optional archetype filter) that can be executed on a Database.
+/// QuerySpec is a specification of components (and optional archetype filter) that can be executed on a Database.
 allocator: std.mem.Allocator,
 component_ids: std.ArrayListUnmanaged(ComponentId) = .empty,
 /// Optional pre-filter of archetype ids to restrict execution to a subset
 archetype_filter: ?std.ArrayListUnmanaged(Archetype.Id) = null,
 
-const Query = @This();
+const QuerySpec = @This();
 
 /// Helper function to extract component IDs from a component specification
 fn extractComponentIds(allocator: std.mem.Allocator, components: anytype) !std.ArrayListUnmanaged(ComponentId) {
@@ -27,8 +27,8 @@ fn extractComponentIds(allocator: std.mem.Allocator, components: anytype) !std.A
     return component_ids;
 }
 
-pub fn fromComponentTypes(allocator: std.mem.Allocator, spec: anytype) !Query {
-    return Query{
+pub fn fromComponentTypes(allocator: std.mem.Allocator, spec: anytype) !QuerySpec {
+    return QuerySpec{
         .allocator = allocator,
         .component_ids = try extractComponentIds(allocator, spec),
         .archetype_filter = null,
@@ -39,22 +39,22 @@ pub fn fromComponentTypesAndArchetypeIds(
     allocator: std.mem.Allocator,
     archetype_ids: []const Archetype.Id,
     components: anytype,
-) !Query {
+) !QuerySpec {
     var filter = std.ArrayListUnmanaged(Archetype.Id).empty;
     try filter.appendSlice(allocator, archetype_ids);
-    return Query{
+    return QuerySpec{
         .allocator = allocator,
         .component_ids = try extractComponentIds(allocator, components),
         .archetype_filter = filter,
     };
 }
 
-pub fn deinit(self: *Query) void {
+pub fn deinit(self: *QuerySpec) void {
     if (self.archetype_filter) |*flt| flt.deinit(self.allocator);
     self.component_ids.deinit(self.allocator);
 }
 
-pub fn execute(self: *const Query, db: *Database) !QueryResult {
+pub fn execute(self: *const QuerySpec, db: *Database) !QueryResult {
     var result_ids = std.ArrayListUnmanaged(Archetype.Id).empty;
     if (self.archetype_filter) |flt| {
         for (flt.items) |archetype_id| {

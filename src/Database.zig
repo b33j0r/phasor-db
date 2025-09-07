@@ -10,7 +10,7 @@ const ComponentSet = root.ComponentSet;
 const ComponentMeta = root.ComponentMeta;
 const ComponentId = root.ComponentId;
 const componentId = root.componentId;
-const Query = root.Query;
+const QuerySpec = root.QuerySpec;
 const QueryResult = root.QueryResult;
 const GroupBy = root.GroupBy;
 const Transaction = root.Transaction;
@@ -365,7 +365,7 @@ pub fn removeComponents(
 
 /// Queries the database for archetypes that match the specified component types.
 pub fn query(self: *Database, spec: anytype) !QueryResult {
-    var q = try Query.fromComponentTypes(self.allocator, spec);
+    var q = try QuerySpec.fromComponentTypes(self.allocator, spec);
     defer q.deinit();
     return try q.execute(self);
 }
@@ -388,7 +388,7 @@ test query {
         Position{ .x = 3.0, .y = 4.0 },
     });
 
-    // Query for entities with position component
+    // QuerySpec for entities with position component
     var q = try db.query(.{Position});
     defer q.deinit();
 
@@ -443,7 +443,7 @@ test groupBy {
         Types.Data{ .number = 30 },
     });
 
-    // Query for groups by Layer trait
+    // QuerySpec for groups by Layer trait
     var group_by = try db.groupBy(LayerN);
     defer group_by.deinit();
 

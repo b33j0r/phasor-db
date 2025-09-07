@@ -498,7 +498,7 @@ test "Database query one component" {
     const entity1_id = try db.createEntity(.{ .position = Position{ .x = 1.0, .y = 2.0 } });
     const entity2_id = try db.createEntity(.{ .position = Position{ .x = 3.0, .y = 4.0 } });
 
-    // Query for entities with Position
+    // QuerySpec for entities with Position
     var positions = try db.query(.{Position});
     defer positions.deinit();
     try testing.expectEqual(2, positions.count());
@@ -531,7 +531,7 @@ test "Database query multiple components" {
     _ = _entity2_id; // Intentionally unused - testing that query doesn't return it
     _ = _entity3_id; // Intentionally unused - testing that query doesn't return it
 
-    // Query for entities with both Position and Health
+    // QuerySpec for entities with both Position and Health
     var query_result = try db.query(.{ Position, Health });
     defer query_result.deinit();
 
@@ -698,9 +698,9 @@ test "Database memory leak - entity lifecycle stress test" {
             const entity_id = if (i % 3 == 0)
                 try db.createEntity(.{ .position = Position{ .x = @floatFromInt(i), .y = @floatFromInt(cycle) }, .health = Health{ .current = 100, .max = 100 } })
             else if (i % 3 == 1)
-                try db.createEntity(.{ .position = Position{ .x = @floatFromInt(i), .y = @floatFromInt(cycle) }, .velocity = Velocity{ .dx = 1.0, .dy = 0.0 }, .health = Health{ .current = 50, .max = 100 } })
-            else
-                try db.createEntity(.{ .position = Position{ .x = @floatFromInt(i), .y = @floatFromInt(cycle) } });
+                    try db.createEntity(.{ .position = Position{ .x = @floatFromInt(i), .y = @floatFromInt(cycle) }, .velocity = Velocity{ .dx = 1.0, .dy = 0.0 }, .health = Health{ .current = 50, .max = 100 } })
+                else
+                    try db.createEntity(.{ .position = Position{ .x = @floatFromInt(i), .y = @floatFromInt(cycle) } });
 
             try entities.append(allocator, entity_id);
         }
