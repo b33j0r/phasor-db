@@ -73,8 +73,47 @@ pub fn Res(comptime ResourceT: type) type {
 
 /// `Query` is a declarative comptime construct to specify
 /// a query for components in the ECS database.
+///
+/// When used as a system parameter, it is a wrapper that fetches a QueryResult
+/// from the Transaction during system parameter initialization.
 pub fn Query(comptime Parts: anytype) type {
-    return Parts;
+    const QueryResult = root.QueryResult;
+    const Entity = root.Entity;
+    return struct {
+        result: QueryResult = undefined,
+
+        const Self = @This();
+
+        /// Initializes this system parameter by executing the query on the transaction.
+        pub fn init_system_param(self: *Self, tx: *root.Transaction) !void {
+            self.result = try tx.query(Parts);
+        }
+
+        /// Free resources held by the underlying QueryResult.
+        pub fn deinit(self: *Self) void {
+            self.result.deinit();
+        }
+
+        /// Number of entities matching the query.
+        pub fn count(self: *const Self) usize {
+            return self.result.count();
+        }
+
+        /// Iterator over entities matching the query.
+        pub fn iterator(self: *const Self) QueryResult.Iterator {
+            return self.result.iterator();
+        }
+
+        /// Convenience to get the first entity matching the query, if any.
+        pub fn first(self: *const Self) ?Entity {
+            return self.result.first();
+        }
+
+        /// Group the results by a trait.
+        pub fn groupBy(self: *const Self, TraitT: anytype) !root.GroupByResult {
+            return self.result.groupBy(TraitT);
+        }
+    };
 }
 
 /// A marker to specify that a component is mutable

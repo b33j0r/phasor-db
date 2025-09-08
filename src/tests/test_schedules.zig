@@ -95,3 +95,38 @@ test "System with Res(T) param" {
     const health_res = db.getResource(Health) orelse unreachable;
     try std.testing.expect(health_res.current == 103);
 }
+
+
+test "System with Query(.{T}) param" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create one Player entity so the query sees it
+    _ = try db.createEntity(.{ Player{} });
+
+    var schedule = Schedule.init(allocator);
+    defer schedule.deinit();
+
+    var tx = db.transaction();
+    defer tx.deinit();
+
+    const system_with_query_param_fn = struct {
+        pub fn system_with_query_param(q: Query(.{ Player })) !void {
+            // Should see exactly one Player entity
+            try std.testing.expectEqual(@as(usize, 1), q.count());
+
+            var iter = q.iterator();
+            var total: usize = 0;
+            while (iter.next()) |_| total += 1;
+            try std.testing.expectEqual(@as(usize, 1), total);
+
+            // Explicitly deinit the query to free resources
+            var q_mut = q; // make a mutable copy to call deinit
+            q_mut.deinit();
+        }
+    }.system_with_query_param;
+
+    try schedule.add(system_with_query_param_fn);
+    try schedule.run(&tx);
+}
