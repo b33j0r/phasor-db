@@ -13,6 +13,7 @@ pub const Without = @import("systems.zig").Without;
 pub const Mut = @import("systems.zig").Mut;
 pub const QuerySpec = @import("QuerySpec.zig");
 pub const QueryResult = @import("QueryResult.zig");
+pub const Res = @import("systems.zig").Res;
 pub const ResourceManager = @import("ResourceManager.zig");
 pub const Schedule = @import("Schedule.zig");
 pub const System = @import("systems.zig").System;

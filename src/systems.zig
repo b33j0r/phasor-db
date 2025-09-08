@@ -2,11 +2,6 @@ const std = @import("std");
 const root = @import("root.zig");
 const Transaction = root.Transaction;
 
-// System Parameters
-//
-// System parameters are used to determine the dependency
-// graph of systems. They are specified as comptime wrappers.
-
 /// A system is a type-erased function that can be scheduled.
 pub const System = struct {
     run: *const fn (transaction: *Transaction) anyerror!void,
@@ -37,9 +32,12 @@ pub const System = struct {
                     if (ParamType == *Transaction) {
                         // Get transaction from database
                         args_tuple[i] = transaction;
+                    } else if (@hasDecl(ParamType, "init_system_param")) {
+                        // It's a system parameter (e.g., Res(T))
+                        var param_instance: ParamType = undefined;
+                        try param_instance.init_system_param(transaction);
+                        args_tuple[i] = param_instance;
                     } else {
-                        // Handle other parameter types here as you add them
-                        // For now, compilation error for unsupported types
                         @compileError("Unsupported system parameter type: " ++ @typeName(ParamType));
                     }
                 }
@@ -52,6 +50,26 @@ pub const System = struct {
         return System{ .run = runFn };
     }
 };
+
+// System Parameters
+//
+// System parameters are used to determine the dependency
+// graph of systems. They are specified as comptime wrappers.
+
+/// `Res(T)` is a comptime wrapper to specify
+/// a resource of type `T` as a system parameter.
+pub fn Res(comptime ResourceT: type) type {
+    return struct {
+        ptr: *T,
+
+        const Self = @This();
+        pub const T = ResourceT;
+
+        pub fn init_system_param(self: *Self, tx: *Transaction) !void {
+            self.ptr = tx.getResource(ResourceT).?;
+        }
+    };
+}
 
 /// `Query` is a declarative comptime construct to specify
 /// a query for components in the ECS database.
