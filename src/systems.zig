@@ -128,7 +128,41 @@ pub fn Without(comptime ComponentT: type) type {
     return ComponentT;
 }
 
-/// A marker to specify grouping in a query result.
-pub fn GroupBy(comptime ComponentT: type) type {
-    return ComponentT;
+/// `GroupBy(TraitT)` is a system parameter that provides grouped query results
+/// for all entities/components implementing the given trait.
+///
+/// Usage in a system function:
+///   fn my_system(groups: GroupBy(MyTrait)) !void { ... }
+///
+/// It mirrors the Query system parameter style, but groups across the entire database
+/// by the specified trait. If you need to pre-filter by components, use Query(...).groupBy(Trait)
+/// inside the system for now.
+pub fn GroupBy(comptime TraitT: anytype) type {
+    const GroupByResult = root.GroupByResult;
+    return struct {
+        result: GroupByResult = undefined,
+
+        const Self = @This();
+
+        /// Initializes this system parameter by grouping the entire DB by TraitT.
+        pub fn init_system_param(self: *Self, tx: *root.Transaction) !void {
+            // There is no Transaction facade for Trait grouping across DB; use database directly.
+            self.result = try tx.database.groupBy(TraitT);
+        }
+
+        /// Free resources held by the underlying GroupByResult.
+        pub fn deinit(self: *Self) void {
+            self.result.deinit();
+        }
+
+        /// Number of groups.
+        pub fn count(self: *const Self) usize {
+            return self.result.count();
+        }
+
+        /// Iterator over groups.
+        pub fn iterator(self: *const Self) root.GroupByResult.GroupIterator {
+            return self.result.iterator();
+        }
+    };
 }
