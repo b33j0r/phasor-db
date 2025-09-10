@@ -14,20 +14,17 @@ const QuerySpec = root.QuerySpec;
 const QueryResult = root.QueryResult;
 const GroupByResult = root.GroupByResult;
 const Transaction = root.Transaction;
-const ResourceManager = root.ResourceManager;
 
 allocator: std.mem.Allocator,
 archetypes: std.AutoArrayHashMapUnmanaged(Archetype.Id, Archetype) = .empty,
 entities: std.AutoArrayHashMapUnmanaged(Entity.Id, Entity) = .empty,
 next_entity_id: Entity.Id = 0,
-resources: ResourceManager,
 
 const Database = @This();
 
 pub fn init(allocator: std.mem.Allocator) Database {
     return Database{
         .allocator = allocator,
-        .resources = ResourceManager.init(allocator),
     };
 }
 
@@ -38,7 +35,6 @@ pub fn deinit(self: *Database) void {
     }
     self.archetypes.deinit(self.allocator);
     self.entities.deinit(self.allocator);
-    self.resources.deinit();
 }
 
 /// `transaction` begins a new transaction on the database. You should use this
@@ -474,26 +470,3 @@ test groupBy {
     try std.testing.expectEqual(20, layer_2_entity.get(Types.Data).?.number);
 }
 
-//
-// Resource Management Methods
-//
-
-/// Insert a resource into the database's resource manager
-pub fn insertResource(self: *Database, resource: anytype) !void {
-    try self.resources.insert(resource);
-}
-
-/// Get a resource from the database's resource manager
-pub fn getResource(self: *Database, comptime T: type) ?*T {
-    return self.resources.get(T);
-}
-
-/// Check if a resource exists in the database's resource manager
-pub fn hasResource(self: *Database, comptime T: type) bool {
-    return self.resources.has(T);
-}
-
-/// Remove a resource from the database's resource manager
-pub fn removeResource(self: *Database, comptime T: type) bool {
-    return self.resources.remove(T);
-}

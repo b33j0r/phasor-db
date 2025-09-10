@@ -10,7 +10,6 @@ pub const Entity = @import("Entity.zig");
 pub const GroupByResult = @import("GroupByResult.zig");
 pub const QuerySpec = @import("QuerySpec.zig");
 pub const QueryResult = @import("QueryResult.zig");
-pub const ResourceManager = @import("ResourceManager.zig");
 pub const Trait = @import("Trait.zig");
 pub const Transaction = @import("Transaction.zig");
 

@@ -752,11 +752,6 @@ test "Comprehensive memory leak detection - realistic game simulation" {
             }
         }
 
-        // Every 20 ticks, manage resources
-        if (tick % 20 == 0) {
-            try db.insertResource(GameState{ .score = @intCast(tick * 10), .level = @intCast(tick / 50 + 1), .time_remaining = 120.0 });
-        }
-
         // Use transactions periodically
         if (tick % 25 == 0) {
             var tx = db.transaction();
