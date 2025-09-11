@@ -37,6 +37,14 @@ pub fn deinit(self: *Database) void {
     self.entities.deinit(self.allocator);
 }
 
+pub fn getEntityCount(self: *const Database) usize {
+    return self.entities.count();
+}
+
+pub fn getArchetypeCount(self: *const Database) usize {
+    return self.archetypes.count();
+}
+
 /// `transaction` begins a new transaction on the database. You should use this
 /// instead of directly modifying the database to ensure atomicity and consistency.
 pub fn transaction(self: *Database) Transaction {
@@ -469,4 +477,3 @@ test groupBy {
     // Verify entity in Layer 2
     try std.testing.expectEqual(20, layer_2_entity.get(Types.Data).?.number);
 }
-

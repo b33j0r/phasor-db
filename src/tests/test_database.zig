@@ -698,9 +698,9 @@ test "Database memory leak - entity lifecycle stress test" {
             const entity_id = if (i % 3 == 0)
                 try db.createEntity(.{ .position = Position{ .x = @floatFromInt(i), .y = @floatFromInt(cycle) }, .health = Health{ .current = 100, .max = 100 } })
             else if (i % 3 == 1)
-                    try db.createEntity(.{ .position = Position{ .x = @floatFromInt(i), .y = @floatFromInt(cycle) }, .velocity = Velocity{ .dx = 1.0, .dy = 0.0 }, .health = Health{ .current = 50, .max = 100 } })
-                else
-                    try db.createEntity(.{ .position = Position{ .x = @floatFromInt(i), .y = @floatFromInt(cycle) } });
+                try db.createEntity(.{ .position = Position{ .x = @floatFromInt(i), .y = @floatFromInt(cycle) }, .velocity = Velocity{ .dx = 1.0, .dy = 0.0 }, .health = Health{ .current = 50, .max = 100 } })
+            else
+                try db.createEntity(.{ .position = Position{ .x = @floatFromInt(i), .y = @floatFromInt(cycle) } });
 
             try entities.append(allocator, entity_id);
         }
@@ -914,4 +914,50 @@ test "Database simulated ECS renderer" {
 
     const viewport_camera_b = viewport_camera_b_query.first().?.id;
     try testing.expectEqual(camera_b, viewport_camera_b);
+}
+
+test "Database getEntityCount" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    try testing.expectEqual(@as(usize, 0), db.getEntityCount());
+
+    const entity1 = try db.createEntity(.{ .position = Position{ .x = 1.0, .y = 2.0 } });
+    try testing.expectEqual(@as(usize, 1), db.getEntityCount());
+
+    const entity2 = try db.createEntity(.{ .position = Position{ .x = 3.0, .y = 4.0 }, .health = Health{ .current = 100, .max = 100 } });
+    try testing.expectEqual(@as(usize, 2), db.getEntityCount());
+
+    try db.removeEntity(entity1);
+    try testing.expectEqual(@as(usize, 1), db.getEntityCount());
+
+    try db.removeEntity(entity2);
+    try testing.expectEqual(@as(usize, 0), db.getEntityCount());
+}
+
+test "Database getArchetypeCount" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    try testing.expectEqual(@as(usize, 0), db.getArchetypeCount());
+
+    const entity1 = try db.createEntity(.{ .position = Position{ .x = 1.0, .y = 2.0 } });
+    try testing.expectEqual(@as(usize, 1), db.getArchetypeCount());
+
+    const entity2 = try db.createEntity(.{ .position = Position{ .x = 3.0, .y = 4.0 }, .health = Health{ .current = 100, .max = 100 } });
+    try testing.expectEqual(@as(usize, 2), db.getArchetypeCount());
+
+    const entity3 = try db.createEntity(.{ .position = Position{ .x = 5.0, .y = 6.0 } });
+    try testing.expectEqual(@as(usize, 2), db.getArchetypeCount()); // Same archetype as entity1
+
+    try db.removeEntity(entity1);
+    try testing.expectEqual(@as(usize, 2), db.getArchetypeCount()); // Archetype still exists
+
+    try db.removeEntity(entity3);
+    try testing.expectEqual(@as(usize, 1), db.getArchetypeCount()); // Archetype pruned
+
+    try db.removeEntity(entity2);
+    try testing.expectEqual(@as(usize, 0), db.getArchetypeCount()); // All archetypes pruned
 }
