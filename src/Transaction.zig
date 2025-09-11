@@ -4,7 +4,6 @@ const Database = root.Database;
 const Entity = root.Entity;
 const QueryResult = root.QueryResult;
 const ComponentId = root.ComponentId;
-const ResourceManager = root.ResourceManager;
 
 allocator: std.mem.Allocator,
 database: *Database,
@@ -63,22 +62,6 @@ pub fn query(self: *Transaction, components: anytype) !QueryResult {
 
 pub fn groupBy(self: *Transaction, component_id: ComponentId, key: i32) !*const root.Group {
     return self.database.groupBy(component_id, key);
-}
-
-pub fn getResource(self: *Transaction, comptime T: type) ?*T {
-    return self.database.getResource(T);
-}
-
-pub fn hasResource(self: *Transaction, comptime T: type) bool {
-    return self.database.hasResource(T);
-}
-
-pub fn insertResource(self: *Transaction, resource: anytype) !void {
-    try self.database.insertResource(resource);
-}
-
-pub fn removeResource(self: *Transaction, comptime T: type) bool {
-    return self.database.removeResource(T);
 }
 
 //

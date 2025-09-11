@@ -1,7 +1,7 @@
-
 ![phasor-logo.png](docs/phasor-logo.png)
 
-The `phasor-db` library is an Entity-Component-System database. For a more complete ECS library, see [phasor](https://github.com/b33j0r/phasor), which uses this as a dependency.
+The `phasor-db` library is an Entity-Component-System database. For a more complete ECS library,
+see [phasor-ecs](https://github.com/b33j0r/phaso-ecs), which uses this as a dependency.
 
 ## Architecture
 
@@ -65,19 +65,18 @@ pub fn main() !void {
 }
 ```
 
-
 ## Key Features
 
 - Archetype-based ECS storage with component columns and contiguous entity rows.
 - Query by component types or trait types (virtual components). QueryResult supports iterator(), count(), first(), and deinit().
 - Trait system:
-  - Marker traits (zero-sized) match presence.
-  - Identical-layout traits expose a view type identical to the component for ergonomic access.
-  - Grouped traits with __group_key__ enable grouping entities by a key.
+    - Marker traits (zero-sized) match presence.
+    - Identical-layout traits expose a view type identical to the component for ergonomic access.
+    - Grouped traits with __group_key__ enable grouping entities by a key.
 - Grouping APIs:
-  - Database.groupBy(TraitType) groups all entities by a grouped trait.
-  - QueryResult.groupBy(TraitType) groups only the matched subset.
-  - GroupByResult.Group supports iterator(), query(.{...}), and nested groupBy.
+    - Database.groupBy(TraitType) groups all entities by a grouped trait.
+    - QueryResult.groupBy(TraitType) groups only the matched subset.
+    - GroupByResult.Group supports iterator(), query(.{...}), and nested groupBy.
 - Resource manager (db.resources) for process-wide typed resources: insert/get/has/remove.
 - Transactions for batching entity create/remove and component add/remove with deferred execution.
 - Simple component access via Entity.get(T), Entity.has(T), and mutation via Entity.set(value).
@@ -86,6 +85,7 @@ pub fn main() !void {
 ## Additional Examples
 
 ### Using count and first on query results
+
 ```zig
 const std = @import("std");
 const ecs = @import("phasor-db");
@@ -111,6 +111,7 @@ pub fn main() !void {
 ```
 
 ### Trait-based queries (identical layout)
+
 ```zig
 const ecs = @import("phasor-db");
 const Database = ecs.Database;
@@ -147,6 +148,7 @@ pub fn main() !void {
 ```
 
 ### Grouping by a grouped trait
+
 ```zig
 const ecs = @import("phasor-db");
 const Database = ecs.Database;
@@ -186,47 +188,5 @@ pub fn main() !void {
 ```
 
 ### Resources
-```zig
-const ecs = @import("phasor-db");
-const Database = ecs.Database;
 
-const ClearColor = struct { r: f32, g: f32, b: f32, a: f32 };
-
-pub fn main() !void {
-    const allocator = std.heap.c_allocator;
-    var db = Database.init(allocator);
-    defer db.deinit();
-
-    try db.resources.insert(ClearColor{ .r = 0.1, .g = 0.2, .b = 0.3, .a = 1.0 });
-    const cc = db.resources.get(ClearColor).?;
-    std.debug.print("clear=({}, {}, {}, {})\n", .{ cc.r, cc.g, cc.b, cc.a });
-}
-```
-
-### Transactions
-```zig
-const ecs = @import("phasor-db");
-const Database = ecs.Database;
-
-const Position = struct { x: f32, y: f32 };
-const Velocity = struct { dx: f32, dy: f32 };
-
-pub fn main() !void {
-    const allocator = std.heap.c_allocator;
-    var db = Database.init(allocator);
-    defer db.deinit();
-
-    var txn = db.transaction();
-    defer txn.deinit();
-
-    const id = try txn.createEntity(.{ Position{ .x = 0, .y = 0 } });
-    try txn.addComponents(id, .{ Velocity{ .dx = 1, .dy = 1 } });
-
-    // Immediate reads/queries are available via the transaction
-    var q = try txn.query(.{Position});
-    defer q.deinit();
-    std.debug.print("visible_before_execute={}\n", .{ q.count() });
-
-    try txn.execute(); // apply deferred operations to the database
-}
-```
+Moved to the downstream [phasor-ecs](https://github.com/b33j0r/phasor-ecs) library.
