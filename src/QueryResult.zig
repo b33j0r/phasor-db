@@ -52,7 +52,7 @@ pub fn fromComponentTypesAndArchetypeIds(
 
     for (archetype_ids) |archetype_id| {
         const archetype = database.archetypes.get(archetype_id) orelse continue;
-        if (archetype.hasComponents(component_ids.items)) {
+        if (archetype.hasComponents(component_ids.with.items) and !archetype.hasAnyComponents(component_ids.without.items)) {
             try query_archetype_ids.append(allocator, archetype.id);
         }
     }

@@ -255,6 +255,18 @@ pub fn hasComponents(
     return true;
 }
 
+pub fn hasAnyComponents(
+    self: *const Archetype,
+    components: []const ComponentId,
+) bool {
+    for (components) |comp_id| {
+        if (self.getColumn(comp_id) != null) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /// Copies an entity from this archetype to another archetype.
 /// Only copies components that exist in both archetypes.
 /// Returns the new entity index in the destination archetype.
@@ -286,4 +298,3 @@ pub fn copyEntityTo(
 
     return new_entity_index;
 }
-

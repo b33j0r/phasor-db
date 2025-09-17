@@ -6,10 +6,11 @@ const ComponentId = root.ComponentId;
 const componentId = root.componentId;
 const QueryResult = root.QueryResult;
 const extractComponentIds = root.extractComponentIds;
+const ExtractedComponentIds = root.ExtractedComponentIds;
 
 /// QuerySpec is a specification of components (and optional archetype filter) that can be executed on a Database.
 allocator: std.mem.Allocator,
-component_ids: std.ArrayListUnmanaged(ComponentId) = .empty,
+component_ids: ExtractedComponentIds = .empty,
 /// Optional pre-filter of archetype ids to restrict execution to a subset
 archetype_filter: ?std.ArrayListUnmanaged(Archetype.Id) = null,
 
@@ -53,7 +54,7 @@ pub fn execute(self: *const QuerySpec, db: *Database) !QueryResult {
     if (self.archetype_filter) |flt| {
         for (flt.items) |archetype_id| {
             const archetype = db.archetypes.get(archetype_id) orelse continue;
-            if (archetype.hasComponents(self.component_ids.items)) {
+            if (archetype.hasComponents(self.component_ids.with.items) and !archetype.hasAnyComponents(self.component_ids.without.items)) {
                 try result_ids.append(self.allocator, archetype.id);
             }
         }
@@ -61,7 +62,7 @@ pub fn execute(self: *const QuerySpec, db: *Database) !QueryResult {
         var it = db.archetypes.iterator();
         while (it.next()) |entry| {
             const archetype = entry.value_ptr;
-            if (archetype.hasComponents(self.component_ids.items)) {
+            if (archetype.hasComponents(self.component_ids.with.items) and !archetype.hasAnyComponents(self.component_ids.without.items)) {
                 try result_ids.append(self.allocator, archetype.id);
             }
         }

@@ -35,9 +35,22 @@ pub fn componentId(comptime T: anytype) ComponentId {
     return hasher.final();
 }
 
+/// Return type of extractComponentIds
+pub const ExtractedComponentIds = struct {
+    with: std.ArrayListUnmanaged(ComponentId) = .empty,
+    without: std.ArrayListUnmanaged(ComponentId) = .empty,
+
+    pub const empty = ExtractedComponentIds{};
+
+    pub fn deinit(self: *ExtractedComponentIds, allocator: std.mem.Allocator) void {
+        self.with.deinit(allocator);
+        self.without.deinit(allocator);
+    }
+};
+
 /// Helper function to extract component IDs from a component specification
-pub fn extractComponentIds(allocator: std.mem.Allocator, components: anytype) !std.ArrayListUnmanaged(ComponentId) {
-    var component_ids: std.ArrayListUnmanaged(ComponentId) = .empty;
+pub fn extractComponentIds(allocator: std.mem.Allocator, components: anytype) !ExtractedComponentIds {
+    var component_ids: ExtractedComponentIds = .empty;
     const spec_info = @typeInfo(@TypeOf(components)).@"struct";
     inline for (spec_info.fields) |field| {
         const field_value = @field(components, field.name);
@@ -50,13 +63,21 @@ pub fn extractComponentIds(allocator: std.mem.Allocator, components: anytype) !s
             continue;
         }
 
+        const without = @hasDecl(value_type, "__without__");
+
         // Handle the case where the field contains a type (not an instance)
-        const component_id = if (is_type)
+        const component_id = if (without)
+            componentId(value_type.__without__)
+        else if (is_type)
             componentId(field_value) // field_value is the actual type
         else
             componentId(field_type); // field_value is an instance, so get its type
 
-        try component_ids.append(allocator, component_id);
+        if (without) {
+            try component_ids.without.append(allocator, component_id);
+        } else {
+            try component_ids.with.append(allocator, component_id);
+        }
     }
     return component_ids;
 }
