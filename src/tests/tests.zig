@@ -3,10 +3,13 @@ pub const test_components = @import("test_components.zig");
 pub const test_database = @import("test_database.zig");
 pub const test_queries = @import("test_queries.zig");
 pub const test_transactions = @import("test_transactions.zig");
-
-const std = @import("std");
-const Self = @This();
+pub const test_derived = @import("test_derived.zig");
 
 test "Import tests" {
-    std.testing.refAllDecls(Self);
+    _ = test_archetypes;
+    _ = test_components;
+    _ = test_database;
+    _ = test_queries;
+    _ = test_transactions;
+    _ = test_derived;
 }

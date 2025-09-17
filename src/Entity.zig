@@ -13,10 +13,62 @@ row_index: usize,
 const Entity = @This();
 pub const Id = usize;
 
+/// Get a non-derived component pointer.
+/// If called with a derived component (a type that declares __derived__), this is a compile-time error.
 pub fn get(self: *const Entity, comptime T: type) ?*T {
+    if (@hasDecl(T, "__derived__")) {
+        @compileError("Entity.get cannot be used with derived components. Use Entity.getAlloc(allocator, T) instead.");
+    }
+
     const archetype = self.database.archetypes.get(self.archetype_id) orelse return null;
     const column = archetype.getColumn(componentId(T)) orelse return null;
     return column.get(self.row_index, T);
+}
+
+/// A small RAII-style wrapper for pointers returned by getAlloc.
+/// - For non-derived components, deinit() is a no-op.
+/// - For derived components, deinit() frees the allocated storage.
+pub fn Owned(comptime T: type) type {
+    return struct {
+        /// Pointer to the component value. Always valid while this wrapper is alive.
+        ptr: *T,
+        /// Allocator used when allocating derived values (null for non-derived).
+        allocator: ?std.mem.Allocator = null,
+        /// True when the value was computed from a derived component and thus heap-allocated.
+        is_derived: bool = false,
+
+        const Self = @This();
+        pub fn deinit(self: *const Self) void {
+            if (self.is_derived) {
+                if (self.allocator) |a| {
+                    a.destroy(self.ptr);
+                }
+            }
+            // Note: do not mutate self here so that deinit can be called on const wrappers
+        }
+    };
+}
+
+/// Robust accessor that supports both non-derived and derived components.
+/// - Non-derived: returns a wrapper around an existing pointer (no allocation); deinit() is a no-op.
+/// - Derived: computes the value with __derived__.derive, allocates storage, and returns it; deinit() frees it.
+pub fn getAlloc(self: *const Entity, allocator: std.mem.Allocator, comptime T: type) ?Owned(T) {
+    // Derived component path
+    if (@hasDecl(T, "__derived__")) {
+        if (T.__derived__.derive(self.*)) |value| {
+            const p = allocator.create(T) catch return null;
+            p.* = value;
+            return Owned(T){ .ptr = p, .allocator = allocator, .is_derived = true };
+        } else {
+            return null;
+        }
+    }
+
+    // Non-derived path: return direct pointer into storage wrapped in Owned<T>
+    const archetype = self.database.archetypes.get(self.archetype_id) orelse return null;
+    const column = archetype.getColumn(componentId(T)) orelse return null;
+    const p = column.get(self.row_index, T) orelse return null;
+    return Owned(T){ .ptr = p, .allocator = null, .is_derived = false };
 }
 
 pub fn has(self: *const Entity, comptime T: type) bool {

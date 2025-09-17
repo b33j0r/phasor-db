@@ -21,7 +21,15 @@ fn extractComponentIds(allocator: std.mem.Allocator, components: anytype) !std.A
     inline for (spec_info.fields) |field| {
         const field_value = @field(components, field.name);
         const field_type = @TypeOf(field_value);
-        const id = if (field_type == type) componentId(field_value) else componentId(field_type);
+
+        // If the component type declares __derived__, skip adding a filter id
+        const is_type = field_type == type;
+        const value_type = if (is_type) field_value else field_type;
+        if (@hasDecl(value_type, "__derived__")) {
+            continue;
+        }
+
+        const id = if (is_type) componentId(field_value) else componentId(field_type);
         try component_ids.append(allocator, id);
     }
     return component_ids;

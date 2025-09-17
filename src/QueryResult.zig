@@ -21,8 +21,15 @@ fn extractComponentIds(allocator: std.mem.Allocator, components: anytype) !std.A
         const field_value = @field(components, field.name);
         const field_type = @TypeOf(field_value);
 
+        // Skip derived types from filtering so queries always match
+        const is_type = field_type == type;
+        const value_type = if (is_type) field_value else field_type;
+        if (@hasDecl(value_type, "__derived__")) {
+            continue;
+        }
+
         // Handle the case where the field contains a type (not an instance)
-        const component_id = if (field_type == type)
+        const component_id = if (is_type)
             componentId(field_value) // field_value is the actual type
         else
             componentId(field_type); // field_value is an instance, so get its type
