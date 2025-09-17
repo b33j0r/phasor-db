@@ -5,6 +5,7 @@ const Archetype = root.Archetype;
 const ComponentId = root.ComponentId;
 const componentId = root.componentId;
 const QueryResult = root.QueryResult;
+const extractComponentIds = root.extractComponentIds;
 
 /// QuerySpec is a specification of components (and optional archetype filter) that can be executed on a Database.
 allocator: std.mem.Allocator,
@@ -12,28 +13,13 @@ component_ids: std.ArrayListUnmanaged(ComponentId) = .empty,
 /// Optional pre-filter of archetype ids to restrict execution to a subset
 archetype_filter: ?std.ArrayListUnmanaged(Archetype.Id) = null,
 
-const QuerySpec = @This();
-
-/// Helper function to extract component IDs from a component specification
-fn extractComponentIds(allocator: std.mem.Allocator, components: anytype) !std.ArrayListUnmanaged(ComponentId) {
-    var component_ids: std.ArrayListUnmanaged(ComponentId) = .empty;
-    const spec_info = @typeInfo(@TypeOf(components)).@"struct";
-    inline for (spec_info.fields) |field| {
-        const field_value = @field(components, field.name);
-        const field_type = @TypeOf(field_value);
-
-        // If the component type declares __derived__, skip adding a filter id
-        const is_type = field_type == type;
-        const value_type = if (is_type) field_value else field_type;
-        if (@hasDecl(value_type, "__derived__")) {
-            continue;
-        }
-
-        const id = if (is_type) componentId(field_value) else componentId(field_type);
-        try component_ids.append(allocator, id);
-    }
-    return component_ids;
+pub fn Without(comptime ComponentT: type) type {
+    return struct {
+        pub const __without__ = ComponentT;
+    };
 }
+
+const QuerySpec = @This();
 
 pub fn fromComponentTypes(allocator: std.mem.Allocator, spec: anytype) !QuerySpec {
     return QuerySpec{

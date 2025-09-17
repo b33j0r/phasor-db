@@ -13,6 +13,7 @@ const TestVelocity = fixtures.TestVelocity;
 const Position = fixtures.Position;
 const Health = fixtures.Health;
 const Velocity = fixtures.Velocity;
+const Without = root.Without;
 
 test "QuerySpec first functionality" {
     const allocator = std.testing.allocator;
@@ -355,4 +356,29 @@ test "Database - GroupByResult iteration order 2" {
     for (iterated_keys, sorted_expected) |actual, expected| {
         try testing.expectEqual(expected, actual);
     }
+}
+
+test "Database - Query Without" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create entities with different component combinations
+    _ = try db.createEntity(.{ .health = TestHealth.full }); // Only Health
+    const entity2_id = try db.createEntity(TestEntity.basic_positioned); // Position only
+    _ = try db.createEntity(TestEntity.healthy_positioned); // Position + Health
+    _ = try db.createEntity(.{ .velocity = TestVelocity.stationary }); // Only Velocity
+
+    // Query for entities with Position but WITHOUT Health
+    var query = try db.query(.{ Position, Without(Health) });
+    defer query.deinit();
+
+    try testing.expectEqual(1, query.count());
+
+    var iter = query.iterator();
+    const found_entity = iter.next() orelse null;
+    try testing.expect(found_entity != null);
+    try testing.expectEqual(entity2_id, found_entity.?.id);
+    try testing.expect(found_entity.?.has(Position));
+    try testing.expect(!found_entity.?.has(Health));
 }

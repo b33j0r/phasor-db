@@ -1,43 +1,19 @@
 const std = @import("std");
+
 const root = @import("root.zig");
-const Database = root.Database;
-const Entity = root.Entity;
 const Archetype = root.Archetype;
 const ComponentId = root.ComponentId;
-const componentId = root.componentId;
+const Database = root.Database;
+const Entity = root.Entity;
 const GroupByResult = root.GroupByResult;
+const componentId = root.componentId;
+const extractComponentIds = root.extractComponentIds;
 
 allocator: std.mem.Allocator,
 database: *Database,
 archetype_ids: std.ArrayListUnmanaged(Archetype.Id),
 
 const QueryResult = @This();
-
-/// Helper function to extract component IDs from a component specification
-fn extractComponentIds(allocator: std.mem.Allocator, components: anytype) !std.ArrayListUnmanaged(ComponentId) {
-    var component_ids: std.ArrayListUnmanaged(ComponentId) = .empty;
-    const spec_info = @typeInfo(@TypeOf(components)).@"struct";
-    inline for (spec_info.fields) |field| {
-        const field_value = @field(components, field.name);
-        const field_type = @TypeOf(field_value);
-
-        // Skip derived types from filtering so queries always match
-        const is_type = field_type == type;
-        const value_type = if (is_type) field_value else field_type;
-        if (@hasDecl(value_type, "__derived__")) {
-            continue;
-        }
-
-        // Handle the case where the field contains a type (not an instance)
-        const component_id = if (is_type)
-            componentId(field_value) // field_value is the actual type
-        else
-            componentId(field_type); // field_value is an instance, so get its type
-
-        try component_ids.append(allocator, component_id);
-    }
-    return component_ids;
-}
 
 pub fn fromComponentTypes(
     allocator: std.mem.Allocator,
