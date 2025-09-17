@@ -194,7 +194,7 @@ pub fn addComponents(
     }
 
     // Create ComponentSet from new components to add
-    var new_set = try ComponentSet.fromComponents(self.allocator, components);
+    var new_set = try ComponentSet.fromComponentsRuntime(self.allocator, components);
     defer new_set.deinit();
 
     // Create union of existing and new components
@@ -311,7 +311,7 @@ pub fn removeComponents(
     }
 
     // Create ComponentSet from components to remove
-    var remove_set = try ComponentSet.fromComponents(self.allocator, components);
+    var remove_set = try ComponentSet.fromComponentsRuntime(self.allocator, components);
     defer remove_set.deinit();
 
     // Create difference: existing components minus components to remove

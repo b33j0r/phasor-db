@@ -650,12 +650,16 @@ test "Database addComponents with runtime values" {
     var db = Database.init(allocator);
     defer db.deinit();
 
+    const seed: u64 = @intCast(std.time.milliTimestamp());
+    var prng = std.Random.DefaultPrng.init(seed);
+    var random = prng.random();
+
     // Create an entity with Position
     const entity_id = try db.createEntity(.{ .position = Position{ .x = 1.0, .y = 2.0 } });
 
     // Add Health component with runtime values
-    const health_current: i32 = 50; // Not comptime-known
-    const health_max: i32 = 100; // Not comptime-known
+    const health_current: i32 = random.intRangeAtMost(i32, 10, 100);
+    const health_max: i32 = health_current + 10;
 
     try db.addComponents(entity_id, .{
         Health{ .current = health_current, .max = health_max },
@@ -664,8 +668,8 @@ test "Database addComponents with runtime values" {
     // Verify entity has both components
     const entity = db.getEntity(entity_id).?;
     try testing.expectEqual(@as(f32, 1.0), entity.get(Position).?.x);
-    try testing.expectEqual(@as(i32, 50), entity.get(Health).?.current);
-    try testing.expectEqual(@as(i32, 100), entity.get(Health).?.max);
+    try testing.expectEqual(health_current, entity.get(Health).?.current);
+    try testing.expectEqual(health_max, entity.get(Health).?.max);
 }
 
 // Test components for memory stress testing
@@ -960,4 +964,29 @@ test "Database getArchetypeCount" {
 
     try db.removeEntity(entity2);
     try testing.expectEqual(@as(usize, 0), db.getArchetypeCount()); // All archetypes pruned
+}
+
+test "Database replace components with addComponents" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create an entity with Position and Health
+    const entity_id = try db.createEntity(TestEntity.healthy_positioned);
+
+    // Replace Health component using addComponents
+    try db.addComponents(entity_id, .{ .health = TestHealth.critical });
+
+    // Entity should still be in the same archetype (Position + Health)
+    const entity = db.getEntity(entity_id).?;
+    const archetype = db.archetypes.get(entity.archetype_id).?;
+    try testing.expectEqual(@as(usize, 2), archetype.columns.len);
+
+    // Health component should be updated
+    try testing.expectEqual(TestHealth.critical.current, entity.get(Health).?.current);
+    try testing.expectEqual(TestHealth.critical.max, entity.get(Health).?.max);
+
+    // Position component should remain unchanged
+    try testing.expectEqual(TestPositions.basic.x, entity.get(Position).?.x);
+    try testing.expectEqual(TestPositions.basic.y, entity.get(Position).?.y);
 }

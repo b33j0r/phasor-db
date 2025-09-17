@@ -54,7 +54,11 @@ pub fn fromComponentsRuntime(allocator: std.mem.Allocator, components: anytype) 
     // Create ComponentMeta for each component using runtime type inspection
     inline for (info.fields) |field| {
         const component_value = @field(components, field.name);
-        const ComponentT = @TypeOf(component_value);
+        // Handle both types and values - same pattern as fromComponents
+        const ComponentT = switch (@TypeOf(component_value)) {
+            type => component_value,
+            else => @TypeOf(component_value),
+        };
         const meta = ComponentMeta.from(ComponentT);
         try set.insertSorted(meta);
     }
