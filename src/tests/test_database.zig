@@ -990,3 +990,41 @@ test "Database replace components with addComponents" {
     try testing.expectEqual(TestPositions.basic.x, entity.get(Position).?.x);
     try testing.expectEqual(TestPositions.basic.y, entity.get(Position).?.y);
 }
+
+test "Database addComponent - singular doesn't require tuple" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create an entity with Position
+    const entity_id = try db.createEntity(.{ .position = Position{ .x = 1.0, .y = 2.0 } });
+
+    // Add Health component without tuple
+    try db.addComponent(entity_id, Health{ .current = 100, .max = 100 });
+
+    // Verify entity has both components
+    const entity = db.getEntity(entity_id).?;
+    try testing.expectEqual(@as(f32, 1.0), entity.get(Position).?.x);
+    try testing.expectEqual(@as(i32, 100), entity.get(Health).?.current);
+    try testing.expectEqual(@as(i32, 100), entity.get(Health).?.max);
+}
+
+test "Database removeComponent - singular doesn't require tuple" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create an entity with Position and Health
+    const entity_id = try db.createEntity(.{ .position = Position{ .x = 1.0, .y = 2.0 }, .health = Health{ .current = 100, .max = 100 } });
+
+    // Remove Health component without tuple
+    try db.removeComponent(entity_id, Health);
+
+    // Verify entity only has Position component
+    const entity = db.getEntity(entity_id).?;
+    const archetype = db.archetypes.get(entity.archetype_id).?;
+    try testing.expectEqual(@as(usize, 1), archetype.columns.len);
+
+    try testing.expectEqual(@as(f32, 1.0), entity.get(Position).?.x);
+    try testing.expectEqual(@as(?*Health, null), entity.get(Health));
+}

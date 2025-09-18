@@ -367,6 +367,23 @@ pub fn removeComponents(
     try self.entities.put(self.allocator, entity_id, updated_entity);
 }
 
+pub fn addComponent(
+    self: *Database,
+    entity_id: Entity.Id,
+    component: anytype,
+) !void {
+    return try self.addComponents(entity_id, .{component});
+}
+
+pub fn removeComponent(
+    self: *Database,
+    entity_id: Entity.Id,
+    component_type: type,
+) !void {
+    const dummy = @as(component_type, undefined);
+    return try self.removeComponents(entity_id, .{dummy});
+}
+
 /// Queries the database for archetypes that match the specified component types.
 pub fn query(self: *Database, spec: anytype) !QueryResult {
     var q = try QuerySpec.fromComponentTypes(self.allocator, spec);
