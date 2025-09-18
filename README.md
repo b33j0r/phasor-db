@@ -1,7 +1,37 @@
 ![phasor-logo.png](docs/phasor-logo.png)
 
-The `phasor-db` library is an Entity-Component-System database. For a more complete ECS library,
+The `phasor-db` library is an Entity-Component database. For a more complete ECS library,
 see [phasor-ecs](https://github.com/b33j0r/phaso-ecs), which uses this as a dependency.
+
+## Installation
+
+This will get the latest version of the library and add it to `build.zig.zon`:
+
+```shell
+zig fetch --save git+https://github.com/b33j0r/phasor-db
+```
+
+You only have to do this once, unless you want to update the library.
+Next, you can add it to your `build.zig` file:
+
+```zig
+// Add phasor-db as a dependency
+const phasor_db_dep = b.dependency("phasor_db", .{});
+const phasor_db_mod = phasor_db_dep.module("phasor-db");
+```
+
+And then add it as an import to your library or executable:
+
+```zig
+const your_lib_mod = b.addModule("phasor-ecs", .{
+    .root_source_file = b.path("src/root.zig"),
+    .target = target,
+    .optimize = optimize,
+    .imports = &.{
+        .{ .name = "phasor-db", .module = phasor_db_mod },
+    },
+}
+```
 
 ## Architecture
 
@@ -67,20 +97,37 @@ pub fn main() !void {
 
 ## Key Features
 
-- Archetype-based ECS storage with component columns and contiguous entity rows.
-- Query by component types or trait types (virtual components). QueryResult supports iterator(), count(), first(), and deinit().
-- Trait system:
-    - Marker traits (zero-sized) match presence.
-    - Identical-layout traits expose a view type identical to the component for ergonomic access.
-    - Grouped traits with __group_key__ enable grouping entities by a key.
-- Grouping APIs:
-    - Database.groupBy(TraitType) groups all entities by a grouped trait.
-    - QueryResult.groupBy(TraitType) groups only the matched subset.
-    - GroupByResult.Group supports iterator(), query(.{...}), and nested groupBy.
-- Resource manager (db.resources) for process-wide typed resources: insert/get/has/remove.
-- Transactions for batching entity create/remove and component add/remove with deferred execution.
-- Simple component access via Entity.get(T), Entity.has(T), and mutation via Entity.set(value).
-- Zig 0.14+ compatible (see build.zig.zon minimum_zig_version).
+- **Archetype-based ECS storage** with component columns and contiguous entity rows
+- **Entity management**:
+    - Create/remove entities with components
+    - Add/remove components from existing entities
+    - Get entity by ID
+    - Set component values on entities
+- **Query system**:
+    - Query by component types or trait types (virtual components)
+    - Query functions: `iterator()`, `count()`, `first()`, and `deinit()`
+    - Negative filtering with `Without(Component)` operator
+- **Trait system**:
+    - Marker traits (zero-sized) match presence
+    - Identical-layout traits expose a view type identical to the component for ergonomic access
+    - Grouped traits with `__group_key__` enable grouping entities by a key
+- **Grouping APIs**:
+    - `Database.groupBy(TraitType)` groups all entities by a grouped trait
+    - `QueryResult.groupBy(TraitType)` groups only the matched subset
+    - `GroupByResult.Group` supports `iterator()`, `query(.{...})`, and nested `groupBy`
+- **Derived components**:
+    - Define components that are dynamically computed from other components
+    - Query derived components like regular components
+- **Transactions**:
+    - Batch entity create/remove and component add/remove
+    - Defer execution until transaction is committed
+    - Simple transaction API: `transaction()`, `execute()`, `deinit()`
+- **Simple component access**:
+    - Access: `Entity.get(T)`, `Entity.has(T)`
+    - Mutation: `Entity.set(value)`
+- **Modern Zig support**:
+    - Zig 0.14 compatible
+    - Zig 0.15 compatible
 
 ## Additional Examples
 
@@ -187,6 +234,127 @@ pub fn main() !void {
 }
 ```
 
-### Resources
+### Query with Without operator (negative filtering)
 
-Moved to the downstream [phasor-ecs](https://github.com/b33j0r/phasor-ecs) library.
+```zig
+const ecs = @import("phasor-db");
+const Database = ecs.Database;
+const Without = ecs.Without;
+
+const Position = struct { x: f32, y: f32 };
+const Health = struct { current: i32, max: i32 };
+
+pub fn main() !void {
+    const allocator = std.heap.c_allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create entities with different component combinations
+    _ = try db.createEntity(.{ Position{ .x = 1.0, .y = 2.0 } }); // Position only
+    _ = try db.createEntity(.{ Position{ .x = 3.0, .y = 4.0 }, Health{ .current = 100, .max = 100 } }); // Position + Health
+
+    // Query for entities with Position but WITHOUT Health
+    var query = try db.query(.{ Position, Without(Health) });
+    defer query.deinit();
+
+    // Should find only the first entity
+    std.debug.print("Found {} entities with Position but no Health\n", .{query.count()});
+
+    var it = query.iterator();
+    if (it.next()) |entity| {
+        const pos = entity.get(Position).?;
+        std.debug.print("Entity at position ({}, {})\n", .{ pos.x, pos.y });
+    }
+}
+```
+
+### Derived components
+
+```zig
+const ecs = @import("phasor-db");
+const Database = ecs.Database;
+
+const Position = struct { x: f32, y: f32 };
+const Target = struct { x: f32, y: f32 };
+
+// Derived component that computes distance to target
+const TargetDistance = struct {
+    distance: f32,
+
+    pub const __derived__ = struct {
+        pub fn derive(entity: ecs.Entity) ?TargetDistance {
+            const pos = entity.get(Position) orelse return null;
+            const target = entity.get(Target) orelse return null;
+
+            const dx = pos.x - target.x;
+            const dy = pos.y - target.y;
+            const dist = @sqrt(dx * dx + dy * dy);
+
+            return TargetDistance{ .distance = dist };
+        }
+    };
+};
+
+pub fn main() !void {
+    const allocator = std.heap.c_allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create entity with Position and Target
+    _ = try db.createEntity(.{
+        Position{ .x = 0.0, .y = 0.0 },
+        Target{ .x = 3.0, .y = 4.0 },
+    });
+
+    // Query for TargetDistance (which will be derived)
+    var query = try db.query(.{TargetDistance});
+    defer query.deinit();
+
+    var it = query.iterator();
+    while (it.next()) |entity| {
+        if (entity.getAlloc(allocator, TargetDistance)) |owned| {
+            defer owned.deinit();
+            std.debug.print("Distance to target: {d:.1}\n", .{owned.ptr.distance});
+            // Should print "Distance to target: 5.0"
+        }
+    }
+}
+```
+
+### Transactions
+
+```zig
+const ecs = @import("phasor-db");
+const Database = ecs.Database;
+
+const Position = struct { x: f32, y: f32 };
+const Health = struct { current: i32, max: i32 };
+
+pub fn main() !void {
+    const allocator = std.heap.c_allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Start a transaction
+    var txn = db.transaction();
+    defer txn.deinit();
+
+    // Queue multiple operations
+    const entity1 = try txn.createEntity(.{ Position{ .x = 1.0, .y = 2.0 } });
+    const entity2 = try txn.createEntity(.{ Position{ .x = 3.0, .y = 4.0 } });
+    try txn.addComponents(entity1, .{ Health{ .current = 100, .max = 100 } });
+
+    // No entities exist yet in the database
+    std.debug.print("Entities before transaction: {}\n", .{db.getEntityCount()});
+
+    // Execute the transaction
+    try txn.execute();
+
+    // Now entities exist
+    std.debug.print("Entities after transaction: {}\n", .{db.getEntityCount()});
+}
+```
+
+## Resources
+
+The Resources functionality has been moved to the downstream [phasor-ecs](https://github.com/b33j0r/phasor-ecs) library.
