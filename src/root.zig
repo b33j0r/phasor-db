@@ -86,8 +86,3 @@ const Self = @This();
 test "Import embedded unit tests" {
     std.testing.refAllDecls(Self);
 }
-
-test "Import external unit tests" {
-    const tests = @import("tests/tests.zig");
-    std.testing.refAllDecls(tests);
-}

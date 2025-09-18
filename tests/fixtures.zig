@@ -1,5 +1,6 @@
 const std = @import("std");
-const root = @import("../root.zig");
+
+const root = @import("phasor-db");
 const componentId = root.componentId;
 const ComponentId = root.ComponentId;
 const ComponentArray = root.ComponentArray;

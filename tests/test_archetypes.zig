@@ -1,9 +1,10 @@
 const std = @import("std");
 const testing = std.testing;
 
-const root = @import("../root.zig");
+const root = @import("phasor-db");
 const ComponentArray = root.ComponentArray;
 const componentId = root.componentId;
+const Database = root.Database;
 
 const Archetype = root.Archetype;
 
@@ -126,7 +127,6 @@ test "Archetype removeEntityByIndex" {
 
 test "Archetype transition memory leak - component add/remove cycles" {
     const allocator = testing.allocator;
-    const Database = @import("../Database.zig");
     var db = Database.init(allocator);
     defer db.deinit();
 

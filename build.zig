@@ -9,6 +9,14 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
+    const tests_mod = b.addModule("phasor-db-tests", .{
+        .root_source_file = b.path("tests/tests.zig"),
+        .target = target,
+        .imports = &.{
+            .{ .name = "phasor-db", .module = mod },
+        },
+    });
+
     const exe = b.addExecutable(.{
         .name = "phasor-db",
         .root_module = b.createModule(.{
@@ -34,9 +42,13 @@ pub fn build(b: *std.Build) void {
 
     // `zig build test` tests the library
     const mod_tests = b.addTest(.{
-        .root_module = mod,
+        .root_module = tests_mod,
     });
     const run_mod_tests = b.addRunArtifact(mod_tests);
+    const test_mod_tests = b.addTest(.{
+        .root_module = tests_mod,
+    });
+    const run_test_mod_tests = b.addRunArtifact(test_mod_tests);
     const exe_tests = b.addTest(.{
         .root_module = exe.root_module,
     });
@@ -45,4 +57,5 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
+    test_step.dependOn(&run_test_mod_tests.step);
 }
