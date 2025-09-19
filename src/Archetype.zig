@@ -186,6 +186,7 @@ pub fn addEntity(
     entity_id: Entity.Id,
     components: anytype,
 ) !usize {
+    @setEvalBranchQuota(10000);
     const fields = std.meta.fields(@TypeOf(components));
 
     // Verify the number of columns matches

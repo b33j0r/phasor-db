@@ -968,3 +968,38 @@ test "Database removeComponent - singular doesn't require tuple" {
     try testing.expectEqual(@as(f32, 1.0), entity.get(Position).?.x);
     try testing.expectEqual(@as(?*Health, null), entity.get(Health));
 }
+
+test "Increase maximum component limit per createEntity call" {
+    const Component1 = struct { id: u8 = 0 };
+    const Component2 = struct { id: u8 = 0 };
+    const Component3 = struct { id: u8 = 0 };
+    const Component4 = struct { id: u8 = 0 };
+    const Component5 = struct { id: u8 = 0 };
+    const Component6 = struct { id: u8 = 0 };
+    const Component7 = struct { id: u8 = 0 };
+    const Component8 = struct { id: u8 = 0 };
+    const Component9 = struct { id: u8 = 0 };
+    const Component10 = struct { id: u8 = 0 };
+    const Component11 = struct { id: u8 = 0 };
+    const Component12 = struct { id: u8 = 0 };
+
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create an entity with 32 components
+    _ = try db.createEntity(.{
+        Component1{},
+        Component2{},
+        Component3{},
+        Component4{},
+        Component5{},
+        Component6{},
+        Component7{},
+        Component8{},
+        Component9{},
+        Component10{},
+        Component11{},
+        Component12{},
+    });
+}
