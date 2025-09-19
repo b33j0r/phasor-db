@@ -15,30 +15,7 @@ archetype_ids: std.ArrayListUnmanaged(Archetype.Id),
 
 const QueryResult = @This();
 
-pub fn fromComponentTypes(
-    allocator: std.mem.Allocator,
-    database: *Database,
-    spec: anytype,
-) !QueryResult {
-    var archetype_ids: std.ArrayListUnmanaged(Archetype.Id) = .empty;
-    var component_ids = try extractComponentIds(allocator, spec);
-    defer component_ids.deinit(allocator);
-
-    var it = database.archetypes.iterator();
-    while (it.next()) |entry| {
-        const archetype = entry.value_ptr;
-        if (archetype.hasComponents(component_ids.items)) {
-            try archetype_ids.append(allocator, archetype.id);
-        }
-    }
-
-    return QueryResult{
-        .allocator = allocator,
-        .database = database,
-        .archetype_ids = archetype_ids,
-    };
-}
-
+/// Used by QuerySpec and GroupByResult
 pub fn fromComponentTypesAndArchetypeIds(
     allocator: std.mem.Allocator,
     database: *Database,

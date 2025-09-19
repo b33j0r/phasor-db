@@ -39,6 +39,7 @@ pub fn fromTraitType(
     return group_by;
 }
 
+// Used by QueryResult
 pub fn fromTraitTypeAndArchetypeIds(
     allocator: std.mem.Allocator,
     database: *Database,

@@ -30,20 +30,6 @@ pub fn fromComponentTypes(allocator: std.mem.Allocator, spec: anytype) !QuerySpe
     };
 }
 
-pub fn fromComponentTypesAndArchetypeIds(
-    allocator: std.mem.Allocator,
-    archetype_ids: []const Archetype.Id,
-    components: anytype,
-) !QuerySpec {
-    var filter = std.ArrayListUnmanaged(Archetype.Id).empty;
-    try filter.appendSlice(allocator, archetype_ids);
-    return QuerySpec{
-        .allocator = allocator,
-        .component_ids = try extractComponentIds(allocator, components),
-        .archetype_filter = filter,
-    };
-}
-
 pub fn deinit(self: *QuerySpec) void {
     if (self.archetype_filter) |*flt| flt.deinit(self.allocator);
     self.component_ids.deinit(self.allocator);
