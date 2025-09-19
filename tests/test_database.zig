@@ -720,66 +720,6 @@ test "Database memory leak - entity lifecycle stress test" {
     }
 }
 
-test "Comprehensive memory leak detection - realistic game simulation" {
-    const allocator = testing.allocator;
-    var db = Database.init(allocator);
-    defer db.deinit();
-
-    const simulation_ticks = 100;
-    const max_entities = 200;
-
-    var active_entities = std.ArrayListUnmanaged(u64).empty;
-    defer active_entities.deinit(allocator);
-
-    for (0..simulation_ticks) |tick| {
-        // Spawn new entities (like enemies or projectiles)
-        if (active_entities.items.len < max_entities) {
-            for (0..5) |i| {
-                const entity_id = try db.createEntity(.{ .position = Position{ .x = @floatFromInt(tick * 10 + i), .y = @floatFromInt(i) }, .health = Health{ .current = 100, .max = 100 } });
-                try active_entities.append(allocator, entity_id);
-            }
-        }
-
-        // Every 10 ticks, add velocity to some entities
-        if (tick % 10 == 0) {
-            for (active_entities.items[0..@min(10, active_entities.items.len)]) |entity_id| {
-                try db.addComponents(entity_id, .{ .velocity = Velocity{ .dx = 1.0, .dy = -0.5 } });
-            }
-        }
-
-        // Every 15 ticks, remove some entities (like despawning)
-        if (tick % 15 == 0 and active_entities.items.len > 10) {
-            const entities_to_remove = active_entities.items.len / 4;
-            for (0..entities_to_remove) |_| {
-                const entity_id = active_entities.swapRemove(0);
-                try db.removeEntity(entity_id);
-            }
-        }
-
-        // Use transactions periodically
-        if (tick % 25 == 0) {
-            var tx = db.transaction();
-            defer tx.deinit();
-
-            // Queue some operations
-            for (0..3) |i| {
-                const entity_id = try tx.createEntity(.{ .position = Position{ .x = @floatFromInt(tick + i), .y = @floatFromInt(i * 5) } });
-                try active_entities.append(allocator, entity_id);
-            }
-
-            try tx.execute();
-        }
-    }
-
-    // Clean up remaining entities
-    for (active_entities.items) |entity_id| {
-        try db.removeEntity(entity_id);
-    }
-
-    // Final verification - database should be clean
-    try testing.expectEqual(@as(usize, 0), db.entities.count());
-}
-
 test "Database simulated ECS renderer" {
     // This test simulates a renderer. It is meant to make sure the
     // database can handle a real-world ECS use case that is more

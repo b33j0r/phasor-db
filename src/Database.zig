@@ -13,7 +13,6 @@ const componentId = root.componentId;
 const QuerySpec = root.QuerySpec;
 const QueryResult = root.QueryResult;
 const GroupByResult = root.GroupByResult;
-const Transaction = root.Transaction;
 
 allocator: std.mem.Allocator,
 archetypes: std.AutoArrayHashMapUnmanaged(Archetype.Id, Archetype) = .empty,
@@ -43,12 +42,6 @@ pub fn getEntityCount(self: *const Database) usize {
 
 pub fn getArchetypeCount(self: *const Database) usize {
     return self.archetypes.count();
-}
-
-/// `transaction` begins a new transaction on the database. You should use this
-/// instead of directly modifying the database to ensure atomicity and consistency.
-pub fn transaction(self: *Database) Transaction {
-    return Transaction.init(self.allocator, self);
 }
 
 pub fn getEntity(self: *Database, id: Entity.Id) ?Entity {

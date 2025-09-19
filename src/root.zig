@@ -11,7 +11,6 @@ pub const GroupByResult = @import("GroupByResult.zig");
 pub const QuerySpec = @import("QuerySpec.zig");
 pub const QueryResult = @import("QueryResult.zig");
 pub const Trait = @import("Trait.zig");
-pub const Transaction = @import("Transaction.zig");
 pub const Without = QuerySpec.Without;
 
 /// `ComponentId` is a unique identifier for a component type. Use
