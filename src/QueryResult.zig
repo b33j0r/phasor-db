@@ -77,6 +77,50 @@ pub fn groupBy(self: *const QueryResult, TraitT: anytype) !root.GroupByResult {
     );
 }
 
+/// Returns a slice containing all entities that match the query.
+/// Caller owns the memory and must free it using the provided allocator.
+pub fn listAlloc(self: *const QueryResult, allocator: std.mem.Allocator) ![]Entity {
+    const total_count = self.count();
+    var result = try allocator.alloc(Entity, total_count);
+    errdefer allocator.free(result);
+
+    var it = self.iterator();
+    var index: usize = 0;
+    while (it.next()) |entity| {
+        if (index >= total_count) break; // Safety check
+        result[index] = entity;
+        index += 1;
+    }
+
+    return result[0..index]; // In case we got fewer entities than expected
+}
+
+/// Returns a sorted slice containing all entities that match the query.
+/// Entities are sorted according to the context's lessThan function.
+/// Caller owns the memory and must free it using the provided allocator.
+pub fn sortAlloc(
+    self: *const QueryResult, 
+    allocator: std.mem.Allocator, 
+    ctx: anytype,
+) ![]Entity {
+    // Verify at compile time that ctx has a lessThan method with the correct signature
+    const Ctx = @TypeOf(ctx);
+    comptime {
+        if (!@hasDecl(Ctx, "lessThan")) {
+            @compileError("Context type " ++ @typeName(Ctx) ++ " must have a lessThan function");
+        }
+    }
+
+    // First get all entities as a slice
+    const entities = try self.listAlloc(allocator);
+    errdefer allocator.free(entities);
+
+    // Sort them using the provided context's lessThan function
+    std.sort.pdq(Entity, entities, ctx, Ctx.lessThan);
+
+    return entities;
+}
+
 /// `Iterator` is used to iterate over entities that match the query.
 pub const Iterator = struct {
     query: *const QueryResult,

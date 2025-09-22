@@ -5,7 +5,7 @@ const root = @import("phasor-db");
 const ComponentArray = root.ComponentArray;
 const componentId = root.componentId;
 const Database = root.Database;
-const Transaction = root.Transaction;
+const Entity = root.Entity;
 const fixtures = @import("fixtures.zig");
 const TestEntity = fixtures.TestEntity;
 const TestPositions = fixtures.TestPositions;
@@ -382,4 +382,130 @@ test "Database - Query Without" {
     try testing.expectEqual(entity2_id, found_entity.?.id);
     try testing.expect(found_entity.?.has(Position));
     try testing.expect(!found_entity.?.has(Health));
+}
+
+test "QueryResult listAlloc functionality" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create some entities with positions
+    const entity1_id = try db.createEntity(TestEntity.basic_positioned);
+    const entity2_id = try db.createEntity(TestEntity.basic_positioned);
+    const entity3_id = try db.createEntity(TestEntity.healthy_positioned);
+
+    // Create a query that will match all positioned entities
+    var query = try db.query(.{Position});
+    defer query.deinit();
+
+    // Should find 3 entities
+    try testing.expectEqual(@as(usize, 3), query.count());
+
+    // Get a list of all entities using listAlloc
+    const entity_list = try query.listAlloc(allocator);
+    defer allocator.free(entity_list);
+
+    // Verify the list has the correct length
+    try testing.expectEqual(@as(usize, 3), entity_list.len);
+
+    // Check that all entities in the list have the Position component
+    for (entity_list) |entity| {
+        try testing.expect(entity.has(Position));
+    }
+
+    // Verify the list contains all the expected entity IDs
+    var found_entity1 = false;
+    var found_entity2 = false;
+    var found_entity3 = false;
+
+    for (entity_list) |entity| {
+        if (entity.id == entity1_id) found_entity1 = true;
+        if (entity.id == entity2_id) found_entity2 = true;
+        if (entity.id == entity3_id) found_entity3 = true;
+    }
+
+    try testing.expect(found_entity1);
+    try testing.expect(found_entity2);
+    try testing.expect(found_entity3);
+}
+
+test "QueryResult sortAlloc functionality" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    // Create entities with different health values
+    // We use the predefined TestHealth constants to create entities
+    const entity1_id = try db.createEntity(.{
+        .position = TestPositions.origin,
+        .health = TestHealth.damaged, // Medium health (50)
+    });
+
+    const entity2_id = try db.createEntity(.{
+        .position = TestPositions.origin,
+        .health = TestHealth.full, // Full health (100)
+    });
+
+    const entity3_id = try db.createEntity(.{
+        .position = TestPositions.origin,
+        .health = TestHealth.critical, // Low health (10)
+    });
+
+    // Create a query for entities with health
+    var query = try db.query(.{Health});
+    defer query.deinit();
+
+    // Should find 3 entities
+    try testing.expectEqual(@as(usize, 3), query.count());
+
+    // Define sort context for sorting by health in ascending order
+    const HealthSortContext = struct {
+        pub fn lessThan(_: @This(), a: Entity, b: Entity) bool {
+            const health_a = a.get(Health).?.current;
+            const health_b = b.get(Health).?.current;
+            return health_a < health_b;
+        }
+    };
+
+    const sort_ctx = HealthSortContext{};
+
+    // Get a sorted list of entities by health (ascending)
+    const sorted_entities = try query.sortAlloc(allocator, sort_ctx);
+    defer allocator.free(sorted_entities);
+
+    // Verify we got the right number of entities
+    try testing.expectEqual(@as(usize, 3), sorted_entities.len);
+
+    // Verify the entities are sorted by health in ascending order
+    try testing.expectEqual(entity3_id, sorted_entities[0].id); // Low health (10)
+    try testing.expectEqual(entity1_id, sorted_entities[1].id); // Medium health (50)
+    try testing.expectEqual(entity2_id, sorted_entities[2].id); // Full health (100)
+
+    // Check that the health values are actually in sorted order
+    for (0..sorted_entities.len - 1) |i| {
+        const health_current = sorted_entities[i].get(Health).?.current;
+        const health_next = sorted_entities[i + 1].get(Health).?.current;
+        try testing.expect(health_current <= health_next);
+    }
+
+    // Test sorting in descending order
+    const HealthDescendingSortContext = struct {
+        pub fn lessThan(_: @This(), a: Entity, b: Entity) bool {
+            const health_a = a.get(Health).?.current;
+            const health_b = b.get(Health).?.current;
+            // Reverse the comparison for descending order
+            return health_a > health_b;
+        }
+    };
+
+    const desc_sort_ctx = HealthDescendingSortContext{};
+
+    // Get a sorted list of entities by health (descending)
+    const sorted_desc_entities = try query.sortAlloc(allocator, desc_sort_ctx);
+    defer allocator.free(sorted_desc_entities);
+
+    // Verify the entities are sorted by health in descending order
+    try testing.expectEqual(entity2_id, sorted_desc_entities[0].id); // Full health (100)
+    try testing.expectEqual(entity1_id, sorted_desc_entities[1].id); // Medium health (75)
+    try testing.expectEqual(entity3_id, sorted_desc_entities[2].id); // Low health (25)
 }
