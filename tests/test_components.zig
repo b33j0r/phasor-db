@@ -322,6 +322,7 @@ test "ComponentArray memory leak - capacity growth and shrinkage" {
             @sizeOf(Position),
             @alignOf(Position),
             null,
+            null,
         );
         defer component_array.deinit();
 

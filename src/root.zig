@@ -12,6 +12,7 @@ pub const QuerySpec = @import("QuerySpec.zig");
 pub const QueryResult = @import("QueryResult.zig");
 pub const Trait = @import("Trait.zig");
 pub const Without = QuerySpec.Without;
+pub const Drop = @import("Drop.zig");
 
 /// `ComponentId` is a unique identifier for a component type. Use
 /// `componentId` to generate a `ComponentId` from a type.

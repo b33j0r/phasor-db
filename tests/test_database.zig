@@ -1003,3 +1003,30 @@ test "Increase maximum component limit per createEntity call" {
         Component12{},
     });
 }
+
+test "Database component with __drop__" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    const OwnedCounter = struct {
+        count: usize,
+    };
+
+    const Droppable = struct {
+        counter: *OwnedCounter,
+
+        const Droppable = @This();
+        pub fn __drop__(self: *Droppable) void {
+            self.counter.count += 1;
+        }
+    };
+
+    var counter = OwnedCounter{ .count = 0 };
+    const entity_id = try db.createEntity(.{ .droppable = Droppable{ .counter = &counter } });
+
+    try testing.expectEqual(@as(usize, 0), counter.count);
+
+    try db.removeEntity(entity_id);
+    try testing.expectEqual(@as(usize, 1), counter.count);
+}

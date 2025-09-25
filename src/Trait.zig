@@ -15,9 +15,13 @@ kind: Kind,
 
 const Trait = @This();
 
-pub const Kind = union(enum) { Marker, IdenticalLayout, Grouped: struct {
-    group_key: i32,
-} };
+pub const Kind = union(enum) {
+    Marker,
+    IdenticalLayout,
+    Grouped: struct {
+        group_key: i32,
+    },
+};
 
 pub fn maybeFrom(comptime ComponentT: anytype) ?Trait {
     // check for the __trait__ declaration

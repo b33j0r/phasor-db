@@ -39,6 +39,7 @@ pub fn fromComponentSet(
             meta.size,
             meta.alignment,
             meta.trait,
+            meta.drop,
         );
     }
 
