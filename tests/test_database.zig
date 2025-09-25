@@ -1004,29 +1004,91 @@ test "Increase maximum component limit per createEntity call" {
     });
 }
 
+const OwnedCounter = struct {
+    count: usize,
+};
+
+const Droppable = struct {
+    counter: *OwnedCounter,
+
+    const Self = @This();
+    pub fn __drop__(self: *Self) void {
+        self.counter.count += 1;
+    }
+};
+
 test "Database component with __drop__" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();
 
-    const OwnedCounter = struct {
-        count: usize,
-    };
-
-    const Droppable = struct {
-        counter: *OwnedCounter,
-
-        const Droppable = @This();
-        pub fn __drop__(self: *Droppable) void {
-            self.counter.count += 1;
-        }
-    };
-
     var counter = OwnedCounter{ .count = 0 };
     const entity_id = try db.createEntity(.{ .droppable = Droppable{ .counter = &counter } });
 
-    try testing.expectEqual(@as(usize, 0), counter.count);
+    try testing.expectEqual(0, counter.count);
 
     try db.removeEntity(entity_id);
-    try testing.expectEqual(@as(usize, 1), counter.count);
+    try testing.expectEqual(1, counter.count);
+}
+
+test "Droppable __drop__ called on entity.set replacement" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    var c = OwnedCounter{ .count = 0 };
+    const eid = try db.createEntity(.{ .droppable = Droppable{ .counter = &c } });
+
+    var e = db.getEntity(eid).?;
+    try e.set(Droppable{ .counter = &c }); // replace same type
+    try testing.expectEqual(@as(usize, 1), c.count);
+
+    try db.removeEntity(eid);
+    try testing.expectEqual(@as(usize, 2), c.count);
+}
+
+test "Droppable __drop__ on addComponents update" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    var c = OwnedCounter{ .count = 0 };
+    const eid = try db.createEntity(.{ .droppable = Droppable{ .counter = &c }, .marker = struct {}{} });
+
+    const archetype_before = db.getEntity(eid).?.archetype_id;
+    try db.addComponents(eid, .{ .droppable = Droppable{ .counter = &c } });
+    try testing.expectEqual(@as(usize, 1), c.count);
+    try testing.expectEqual(archetype_before, db.getEntity(eid).?.archetype_id);
+}
+
+test "Droppable __drop__ on removeComponents" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    var c = OwnedCounter{ .count = 0 };
+    const eid = try db.createEntity(.{ .droppable = Droppable{ .counter = &c }, .position = struct { x: i32 }{ .x = 1 } });
+
+    try db.removeComponent(eid, Droppable);
+    try testing.expectEqual(@as(usize, 1), c.count);
+    try testing.expectEqual(@as(?*Droppable, null), db.getEntity(eid).?.get(Droppable));
+}
+
+test "Droppable __drop__ on swapRemove only drops removed index" {
+    const allocator = std.testing.allocator;
+    var db = Database.init(allocator);
+    defer db.deinit();
+
+    var c = OwnedCounter{ .count = 0 };
+    const e1 = try db.createEntity(.{ Droppable{ .counter = &c } });
+    const e2 = try db.createEntity(.{ Droppable{ .counter = &c } });
+    const e3 = try db.createEntity(.{ Droppable{ .counter = &c } });
+
+    try db.removeEntity(e2);
+    try testing.expectEqual(@as(usize, 1), c.count);
+
+    // Removing remaining entities should add two more drops
+    try db.removeEntity(e1);
+    try db.removeEntity(e3);
+    try testing.expectEqual(@as(usize, 3), c.count);
 }

@@ -340,3 +340,41 @@ test "ComponentArray memory leak - capacity growth and shrinkage" {
         try component_array.shrinkAndFree(0);
     }
 }
+
+test "ComponentArray.set drops previous element" {
+    const allocator = std.testing.allocator;
+
+    const OwnedCounter = struct { count: usize };
+    const Droppable = struct {
+        counter: *OwnedCounter,
+        const Self = @This();
+        pub fn __drop__(self: *Self) void { self.counter.count += 1; }
+    };
+
+    var c = OwnedCounter{ .count = 0 };
+    var arr = root.ComponentArray.initFromType(allocator, root.componentId(Droppable), @sizeOf(Droppable), @alignOf(Droppable), null, root.Drop.maybeFrom(Droppable));
+    defer arr.deinit();
+
+    try arr.append(Droppable{ .counter = &c });
+    try arr.set(0, Droppable{ .counter = &c });
+    try testing.expectEqual(@as(usize, 1), c.count);
+}
+
+test "ComponentArray.deinit drops all elements" {
+    const allocator = std.testing.allocator;
+
+    const OwnedCounter = struct { count: usize };
+    const Droppable = struct {
+        counter: *OwnedCounter,
+        const Self = @This();
+        pub fn __drop__(self: *Self) void { self.counter.count += 1; }
+    };
+
+    var c = OwnedCounter{ .count = 0 };
+    var arr = root.ComponentArray.initFromType(allocator, root.componentId(Droppable), @sizeOf(Droppable), @alignOf(Droppable), null, root.Drop.maybeFrom(Droppable));
+    try arr.append(Droppable{ .counter = &c });
+    try arr.append(Droppable{ .counter = &c });
+
+    arr.deinit();
+    try testing.expectEqual(@as(usize, 2), c.count);
+}

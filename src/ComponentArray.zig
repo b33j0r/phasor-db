@@ -56,6 +56,8 @@ pub fn from(
 }
 
 pub fn deinit(self: *ComponentArray) void {
+    self.dropRange(0, self.len);
+
     if (self.data.len > 0) {
         const alignment = std.mem.Alignment.fromByteUnits(self.meta.alignment);
         self.allocator.rawFree(self.data, alignment, @returnAddress());
@@ -86,6 +88,8 @@ pub fn set(self: *ComponentArray, index: usize, value: anytype) !void {
 
     // For zero-sized components, no memory operation is needed
     if (self.meta.size == 0) return;
+
+    self.dropAt(index);
 
     const offset = index * self.meta.stride;
     @memcpy(self.data[offset .. offset + self.meta.size], std.mem.asBytes(&value));
@@ -184,6 +188,8 @@ pub fn shiftRemove(self: *ComponentArray, index: usize) void {
 pub fn swapRemove(self: *ComponentArray, index: usize) void {
     if (index >= self.len) return;
 
+    self.dropAt(index);
+
     if (index != self.len - 1) {
         const dst_offset = index * self.meta.stride;
         const src_offset = (self.len - 1) * self.meta.stride;
@@ -194,6 +200,7 @@ pub fn swapRemove(self: *ComponentArray, index: usize) void {
 }
 
 pub fn clearRetainingCapacity(self: *ComponentArray) void {
+    self.dropRange(0, self.len);
     self.len = 0;
 }
 
@@ -263,4 +270,26 @@ pub fn copyElementToEnd(
     }
 
     dest_array.len += 1;
+}
+
+fn dropAt(self: *ComponentArray, index: usize) void {
+    if (index >= self.len) return;
+    if (self.meta.stride == 0) return;
+    const drop = self.meta.drop orelse return;
+
+    const offset = index * self.meta.stride;
+    const any_ptr: *anyopaque = @ptrFromInt(@intFromPtr(self.data.ptr) + offset);
+    drop.drop_fn.call(any_ptr);
+}
+
+fn dropRange(self: *ComponentArray, start: usize, end: usize) void {
+    if (self.meta.stride == 0) return;
+    const drop = self.meta.drop orelse return;
+
+    var i = start;
+    while (i < end and i < self.len) : (i += 1) {
+        const offset = i * self.meta.stride;
+        const any_ptr: *anyopaque = @ptrFromInt(@intFromPtr(self.data.ptr) + offset);
+        drop.drop_fn.call(any_ptr);
+    }
 }
