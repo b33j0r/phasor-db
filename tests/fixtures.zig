@@ -22,6 +22,11 @@ pub const Health = struct {
     max: i32,
 };
 
+pub const Moveable = struct {
+    pos: Position,
+    vel: Velocity,
+};
+
 pub const Marker = struct {};
 
 pub const Player = struct {};
@@ -63,50 +68,22 @@ pub const TestEntity = struct {
 
 /// Helper function for creating test arrays
 pub fn createPositionArray(allocator: std.mem.Allocator) ComponentArray {
-    return ComponentArray.initFromType(
-        allocator,
-        componentId(Position),
-        @sizeOf(Position),
-        @alignOf(Position),
-        null,
-        null
-    );
+    return ComponentArray.initFromType(allocator, componentId(Position), @sizeOf(Position), @alignOf(Position), null, null);
 }
 
 /// Helper function for creating test arrays
 pub fn createHealthArray(allocator: std.mem.Allocator) ComponentArray {
-    return ComponentArray.initFromType(
-        allocator,
-        componentId(Health),
-        @sizeOf(Health),
-        @alignOf(Health),
-        null,
-        null
-    );
+    return ComponentArray.initFromType(allocator, componentId(Health), @sizeOf(Health), @alignOf(Health), null, null);
 }
 
 /// Helper function for creating test arrays
 pub fn createMarkerArray(allocator: std.mem.Allocator) ComponentArray {
-    return ComponentArray.initFromType(
-        allocator,
-        componentId(Marker),
-        @sizeOf(Marker),
-        @alignOf(Marker),
-        null,
-        null
-    );
+    return ComponentArray.initFromType(allocator, componentId(Marker), @sizeOf(Marker), @alignOf(Marker), null, null);
 }
 
 /// Test fixture for creating and populating arrays
 pub fn createPopulatedArray(allocator: std.mem.Allocator, comptime T: type, items: []const T) !ComponentArray {
-    var array = ComponentArray.initFromType(
-        allocator,
-        componentId(T),
-        @sizeOf(T),
-        @alignOf(T),
-        null,
-        null
-    );
+    var array = ComponentArray.initFromType(allocator, componentId(T), @sizeOf(T), @alignOf(T), null, null);
 
     for (items) |item| {
         try array.append(item);
