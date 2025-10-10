@@ -21,8 +21,11 @@ pub fn get(self: *const Entity, comptime T: type) ?*T {
     }
 
     const archetype = self.database.archetypes.get(self.archetype_id) orelse return null;
-    const column = archetype.getColumn(componentId(T)) orelse return null;
-    return column.get(self.row_index, T);
+    if (archetype.getColumn(componentId(T))) |column| {
+        return column.get(self.row_index, T);
+    }
+
+    return null;
 }
 
 /// A small RAII-style wrapper for pointers returned by getAlloc.
@@ -66,9 +69,36 @@ pub fn getAlloc(self: *const Entity, allocator: std.mem.Allocator, comptime T: t
 
     // Non-derived path: return direct pointer into storage wrapped in Owned<T>
     const archetype = self.database.archetypes.get(self.archetype_id) orelse return null;
-    const column = archetype.getColumn(componentId(T)) orelse return null;
-    const p = column.get(self.row_index, T) orelse return null;
-    return Owned(T){ .ptr = p, .allocator = null, .is_derived = false };
+    if (archetype.getColumn(componentId(T))) |column| {
+        const p = column.get(self.row_index, T) orelse return null;
+        return Owned(T){ .ptr = p, .allocator = null, .is_derived = false };
+    }
+
+    // Try to treat as a bundle (struct of components)
+    if (@typeInfo(T) == .@"struct") {
+        if (self.extractBundleAlloc(T, allocator)) |extracted| {
+            return Owned(T){ .ptr = extracted, .allocator = allocator, .is_derived = true };
+        }
+    }
+
+    return null;
+}
+
+fn extractBundleAlloc(self: *const Entity, T: type, allocator: std.mem.Allocator) ?*T {
+    const fields = std.meta.fields(T);
+    const result = allocator.create(T) catch return null;
+
+    // Initialize all fields by getting the corresponding components from the entity
+    inline for (fields) |field| {
+        const component_ptr = self.get(field.type) orelse {
+            // Failed to get required component, cleanup and return null
+            allocator.destroy(result);
+            return null;
+        };
+        @field(result, field.name) = component_ptr.*;
+    }
+
+    return result;
 }
 
 pub fn has(self: *const Entity, comptime T: type) bool {
