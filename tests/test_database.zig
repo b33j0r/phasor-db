@@ -1012,12 +1012,12 @@ const Droppable = struct {
     counter: *OwnedCounter,
 
     const Self = @This();
-    pub fn __drop__(self: *Self) void {
+    pub fn deinit(self: *Self) void {
         self.counter.count += 1;
     }
 };
 
-test "Database component with __drop__" {
+test "Database component with deinit" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();
@@ -1031,7 +1031,7 @@ test "Database component with __drop__" {
     try testing.expectEqual(1, counter.count);
 }
 
-test "Droppable __drop__ called on entity.set replacement" {
+test "Droppable deinit called on entity.set replacement" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();
@@ -1047,7 +1047,7 @@ test "Droppable __drop__ called on entity.set replacement" {
     try testing.expectEqual(@as(usize, 2), c.count);
 }
 
-test "Droppable __drop__ on addComponents update" {
+test "Droppable deinit on addComponents update" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();
@@ -1061,7 +1061,7 @@ test "Droppable __drop__ on addComponents update" {
     try testing.expectEqual(archetype_before, db.getEntity(eid).?.archetype_id);
 }
 
-test "Droppable __drop__ on removeComponents" {
+test "Droppable deinit on removeComponents" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();
@@ -1074,7 +1074,7 @@ test "Droppable __drop__ on removeComponents" {
     try testing.expectEqual(@as(?*Droppable, null), db.getEntity(eid).?.get(Droppable));
 }
 
-test "Droppable __drop__ on swapRemove only drops removed index" {
+test "Droppable deinit on swapRemove only drops removed index" {
     const allocator = std.testing.allocator;
     var db = Database.init(allocator);
     defer db.deinit();

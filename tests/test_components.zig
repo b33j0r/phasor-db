@@ -348,7 +348,9 @@ test "ComponentArray.set drops previous element" {
     const Droppable = struct {
         counter: *OwnedCounter,
         const Self = @This();
-        pub fn __drop__(self: *Self) void { self.counter.count += 1; }
+        pub fn deinit(self: *Self) void {
+            self.counter.count += 1;
+        }
     };
 
     var c = OwnedCounter{ .count = 0 };
@@ -367,7 +369,9 @@ test "ComponentArray.deinit drops all elements" {
     const Droppable = struct {
         counter: *OwnedCounter,
         const Self = @This();
-        pub fn __drop__(self: *Self) void { self.counter.count += 1; }
+        pub fn deinit(self: *Self) void {
+            self.counter.count += 1;
+        }
     };
 
     var c = OwnedCounter{ .count = 0 };
